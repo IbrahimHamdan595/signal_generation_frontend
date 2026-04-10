@@ -1,21 +1,22 @@
 "use client";
 
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
-import { Spinner } from "@/components/ui/Spinner";
 import { ActionBadge } from "@/components/ui/Badge";
 import SignalCard from "@/components/signals/SignalCard";
 import SentimentBar from "@/components/sentiment/SentimentBar";
 import { useAllSignals } from "@/hooks/useSignals";
 import { useModelStatus } from "@/hooks/useModel";
 import { useSentimentSummaries } from "@/hooks/useSentiment";
+import { useOutcomeSummary } from "@/hooks/useOutcomes";
 import { formatPercent, formatNumber } from "@/lib/utils";
-import { TrendingUp, TrendingDown, Minus, Brain, Activity } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, Brain, Activity, Target } from "lucide-react";
 import Header from "@/components/layout/Header";
 
 export default function DashboardPage() {
   const { data: signals, isLoading: loadingSignals } = useAllSignals();
   const { data: status } = useModelStatus();
   const { data: sentiments, isLoading: loadingSentiment } = useSentimentSummaries();
+  const { data: outcomeSummary } = useOutcomeSummary();
 
   const buyCount = signals?.filter((s) => s.action === "BUY").length ?? 0;
   const sellCount = signals?.filter((s) => s.action === "SELL").length ?? 0;
@@ -64,6 +65,20 @@ export default function DashboardPage() {
             <p className="text-xs text-muted mt-1">{total} total tickers</p>
           </Card>
 
+          {outcomeSummary && outcomeSummary.total > 0 && (
+            <Card glow={outcomeSummary.win_rate >= 0.5 ? "buy" : "sell"}>
+              <div className="flex items-center justify-between mb-2">
+                <CardTitle>Signal Accuracy</CardTitle>
+                <Target size={16} className={outcomeSummary.win_rate >= 0.5 ? "text-buy" : "text-sell"} />
+              </div>
+              <p className={`text-3xl font-bold ${outcomeSummary.win_rate >= 0.5 ? "text-buy" : "text-sell"}`}>
+                {formatPercent(outcomeSummary.win_rate)}
+              </p>
+              <p className="text-xs text-muted mt-1">
+                {outcomeSummary.wins}W / {outcomeSummary.losses}L of {outcomeSummary.total} signals
+              </p>
+            </Card>
+          )}
           <Card glow="accent">
             <div className="flex items-center justify-between mb-2">
               <CardTitle>Model Accuracy</CardTitle>
@@ -96,7 +111,9 @@ export default function DashboardPage() {
                 <span className="text-xs text-muted">by confidence</span>
               </CardHeader>
               {loadingSignals ? (
-                <Spinner />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {[...Array(6)].map((_, i) => <div key={i} className="h-28 bg-surface animate-pulse rounded-xl" />)}
+                </div>
               ) : topSignals && topSignals.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {topSignals.map((s) => (
@@ -153,7 +170,7 @@ export default function DashboardPage() {
                 <CardTitle>Market Sentiment</CardTitle>
               </CardHeader>
               {loadingSentiment ? (
-                <Spinner />
+                <div className="space-y-2">{[...Array(5)].map((_, i) => <div key={i} className="h-8 bg-surface animate-pulse rounded-lg" />)}</div>
               ) : sentiments && sentiments.length > 0 ? (
                 <div className="space-y-3">
                   {sentiments.slice(0, 8).map((s) => (

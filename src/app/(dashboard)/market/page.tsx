@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
-import { Spinner } from "@/components/ui/Spinner";
 import { ActionBadge } from "@/components/ui/Badge";
 import { ingestApi } from "@/lib/api";
 import { useAllSignals } from "@/hooks/useSignals";
@@ -86,7 +85,11 @@ export default function MarketPage() {
           </CardHeader>
 
           {loadingTickers ? (
-            <Spinner />
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+              {[...Array(18)].map((_, i) => (
+                <div key={i} className="h-20 bg-surface animate-pulse rounded-xl" />
+              ))}
+            </div>
           ) : filtered.length === 0 ? (
             <p className="text-sm text-muted text-center py-10">
               {tickers?.length === 0

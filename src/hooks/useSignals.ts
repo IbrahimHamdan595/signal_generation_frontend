@@ -60,3 +60,17 @@ export function useGenerateSignal() {
     onError: () => toast.error("Failed to generate signal"),
   });
 }
+
+export function useGenerateBatchSignals() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ tickers, interval }: { tickers: string[]; interval?: string }) =>
+      signalsApi.generateBatch(tickers, interval),
+    onSuccess: (res) => {
+      const { generated, skipped } = res.data;
+      toast.success(`Generated ${generated} signals${skipped > 0 ? `, skipped ${skipped}` : ""}`);
+      qc.invalidateQueries({ queryKey: ["signals"] });
+    },
+    onError: () => toast.error("Batch generation failed"),
+  });
+}
