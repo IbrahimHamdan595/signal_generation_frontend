@@ -30,6 +30,30 @@ export function useSentimentSnapshot(ticker: string) {
   });
 }
 
+export function useSentimentHistory(ticker: string, limit = 30) {
+  return useQuery<SentimentSnapshotResponse[]>({
+    queryKey: ["sentiment", "history", ticker, limit],
+    queryFn: async () => {
+      const res = await sentimentApi.getSnapshotHistory(ticker, limit);
+      return res.data;
+    },
+    enabled: !!ticker,
+    staleTime: 120_000,
+  });
+}
+
+export function useTickerSentiment(ticker: string) {
+  return useQuery<SentimentSummaryResponse>({
+    queryKey: ["sentiment", "ticker", ticker],
+    queryFn: async () => {
+      const res = await sentimentApi.getTickerSummary(ticker);
+      return res.data;
+    },
+    enabled: !!ticker,
+    staleTime: 120_000,
+  });
+}
+
 export function useSentimentArticles(ticker: string) {
   return useQuery<SentimentArticleResponse[]>({
     queryKey: ["sentiment", "articles", ticker],

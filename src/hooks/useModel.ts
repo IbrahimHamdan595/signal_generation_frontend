@@ -28,9 +28,11 @@ export function useEvalReport() {
 
 export function useTrainModel() {
   const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ tickers, epochs }: { tickers: string[]; epochs?: number }) =>
-      mlApi.train(tickers, epochs),
+  return useMutation<{ job_id: number }, Error, { tickers: string[]; epochs?: number }>({
+    mutationFn: async ({ tickers, epochs }) => {
+      const res = await mlApi.train(tickers, epochs);
+      return res.data;
+    },
     onSuccess: () => {
       toast.success("Training started in background");
       setTimeout(() => qc.invalidateQueries({ queryKey: ["model"] }), 3000);

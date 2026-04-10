@@ -14,6 +14,7 @@ import {
   Menu,
   X,
   Settings,
+  Briefcase,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
 import { useRouter } from "next/navigation";
@@ -25,6 +26,7 @@ const nav = [
   { href: "/market", label: "Market", icon: BarChart2 },
   { href: "/model", label: "Model", icon: Brain },
   { href: "/watchlist", label: "Watchlist", icon: Star },
+  { href: "/portfolio", label: "Portfolio", icon: Briefcase },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

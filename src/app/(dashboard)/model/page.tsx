@@ -14,6 +14,7 @@ import {
   useRunWalkForward,
   useLastTrainResult,
 } from "@/hooks/useModel";
+import { useJobStatus } from "@/hooks/useJobStatus";
 import { formatPercent, formatNumber, formatRelative } from "@/lib/utils";
 import { Brain, Zap, TrendingUp, Target, Activity, RotateCcw, GitBranch, BarChart2, ClipboardList, Loader2 } from "lucide-react";
 import Link from "next/link";
@@ -39,11 +40,13 @@ export default function ModelPage() {
   const [tickerInput, setTickerInput] = useState("");
   const [wfTickerInput, setWfTickerInput] = useState("");
   const [wfSplits, setWfSplits] = useState(5);
+  const [trainJobId, setTrainJobId] = useState<number | null>(null);
+  const { data: trainJob } = useJobStatus(trainJobId);
 
   function handleTrain() {
     const tickers = tickerInput.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean);
     if (tickers.length < 2) return;
-    train({ tickers });
+    train({ tickers }, { onSuccess: (data) => setTrainJobId(data.job_id) });
   }
 
   function handleWalkForward() {
@@ -368,9 +371,24 @@ export default function ModelPage() {
                 <div className="h-1.5 bg-surface rounded-full overflow-hidden">
                   <div className="h-full bg-hold rounded-full animate-pulse w-2/3" />
                 </div>
-                <p className="text-xs text-muted">
-                  Refreshing automatically every 10s — results will appear when done.
-                </p>
+                {trainJob && (
+                  <div className="text-xs text-muted space-y-1">
+                    {trainJob.status === "running" && (
+                      <p>Job #{trainJob.id} — polling every 3s</p>
+                    )}
+                    {trainJob.status === "completed" && (
+                      <p className="text-buy">Job #{trainJob.id} completed</p>
+                    )}
+                    {trainJob.status === "failed" && (
+                      <p className="text-sell">Job #{trainJob.id} failed: {trainJob.error}</p>
+                    )}
+                  </div>
+                )}
+                {!trainJob && (
+                  <p className="text-xs text-muted">
+                    Refreshing automatically every 10s — results will appear when done.
+                  </p>
+                )}
               </div>
             ) : (
               <div className="space-y-2">

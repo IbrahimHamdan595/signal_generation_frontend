@@ -253,6 +253,58 @@ export interface BacktestResult {
   trades: BacktestTrade[];
 }
 
+export interface Position {
+  id: number;
+  user_id: number;
+  ticker: string;
+  quantity: number;
+  avg_cost: number;
+  opened_at: string;
+  closed_at: string | null;
+  realized_pnl: number;
+  is_open: boolean;
+  current_price: number | null;
+  unrealized_pnl: number | null;
+  unrealized_pct: number | null;
+}
+
+export interface PortfolioSummary {
+  open_positions: number;
+  total_cost: number;
+  total_value: number;
+  unrealized_pnl: number;
+  realized_pnl: number;
+  total_pnl: number;
+}
+
+export interface Job {
+  id: number;
+  job_type: string;
+  status: "pending" | "running" | "completed" | "failed";
+  progress: Record<string, unknown>;
+  error: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+}
+
+export interface PriceAlertRule {
+  id: number;
+  ticker: string;
+  condition: "above" | "below";
+  target_price: number;
+  is_active: boolean;
+  triggered_at: string | null;
+  created_at: string;
+}
+
+export interface SP500Ticker {
+  symbol: string;
+  name: string;
+  sector: string;
+  market_cap: number | null;
+}
+
 export interface TokenResponse {
   access_token: string;
   refresh_token: string;

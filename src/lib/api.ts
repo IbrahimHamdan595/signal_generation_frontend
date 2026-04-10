@@ -84,7 +84,8 @@ export const signalsApi = {
   getLatest: (ticker: string) => api.get(`/signals/latest/${ticker}`),
   getHistory: (ticker: string, limit = 50) =>
     api.get(`/signals/history/${ticker}`, { params: { limit } }),
-  filterByAction: (action: string) => api.get(`/signals/filter/action/${action}`),
+  filterByAction: (action: string, interval = "1d", limit = 50) =>
+    api.get(`/signals/filter/action/${action}`, { params: { interval, limit } }),
   filterHighConfidence: (min_confidence = 0.6) =>
     api.get("/signals/filter/high-confidence", { params: { min_confidence } }),
   generate: (ticker: string, interval = "1d") =>
@@ -92,6 +93,9 @@ export const signalsApi = {
   generateBatch: (tickers: string[], interval = "1d") =>
     api.post("/signals/generate/batch", { tickers, interval }),
   explain: (signalId: string) => api.get(`/signals/${signalId}/explain`),
+  getTickers: () => api.get("/signals/tickers"),
+  setOverride: (tickers: string[]) => api.post("/signals/tickers/override", { tickers }),
+  clearOverride: () => api.delete("/signals/tickers/override"),
 };
 
 // ── Market ────────────────────────────────────────────────────────────────────
@@ -111,7 +115,11 @@ export const sentimentApi = {
   getSummary: () => api.get("/sentiment/summary"),
   getTickerSummary: (ticker: string) => api.get(`/sentiment/summary/${ticker}`),
   getSnapshot: (ticker: string) => api.get(`/sentiment/snapshot/${ticker}`),
+  getSnapshotHistory: (ticker: string, limit = 30) =>
+    api.get(`/sentiment/snapshot/${ticker}/history`, { params: { limit } }),
   getArticles: (ticker: string) => api.get(`/sentiment/articles/${ticker}`),
+  fetch: (tickers: string[], limit = 10) =>
+    api.post("/sentiment/fetch", { tickers, limit }),
 };
 
 // ── ML ────────────────────────────────────────────────────────────────────────
@@ -122,6 +130,8 @@ export const mlApi = {
   getLastResult: () => api.get("/ml/train/result"),
   train: (tickers: string[], epochs = 50) =>
     api.post("/ml/train", { tickers, epochs }),
+  trainSync: (tickers: string[], epochs = 20) =>
+    api.post("/ml/train/sync", { tickers, epochs }),
   predict: (ticker: string, interval = "1d") =>
     api.post("/ml/predict", { ticker, interval }),
   runWalkForward: (tickers: string[], n_splits = 5, epochs = 30) =>
@@ -143,6 +153,8 @@ export const ingestApi = {
     api.post("/ingest/ticker", { ticker, interval, period }),
   enrichSentiment: (tickers: string[], period_years = 2) =>
     api.post("/sentiment/enrich", { tickers, period_years }),
+  fetchSentiment: (tickers: string[], limit = 10) =>
+    sentimentApi.fetch(tickers, limit),
 };
 
 // ── Outcomes ──────────────────────────────────────────────────────────────────
