@@ -149,10 +149,14 @@ export const ingestApi = {
   getSP500: () => api.get("/ingest/sp500"),
   ingest: (tickers: string[], interval = "1d", period = "1y") =>
     api.post("/ingest", { tickers, interval, period }),
+  ingestBackground: (tickers: string[], interval = "1d", period = "1y") =>
+    api.post("/ingest/background", { tickers, interval, period }),
   ingestTicker: (ticker: string, interval = "1d", period = "1y") =>
     api.post("/ingest/ticker", { ticker, interval, period }),
   enrichSentiment: (tickers: string[], period_years = 2) =>
     api.post("/sentiment/enrich", { tickers, period_years }),
+  buildDailySentiment: (tickers: string[], years = 5) =>
+    api.post("/sentiment/build-daily", { tickers, years }),
   fetchSentiment: (tickers: string[], limit = 10) =>
     sentimentApi.fetch(tickers, limit),
 };
@@ -226,6 +230,21 @@ export const priceAlertRulesApi = {
 export const jobsApi = {
   get: (id: string) => api.get(`/jobs/${id}`),
   getLatest: (type: string) => api.get(`/jobs/latest/${type}`),
+};
+
+// ── Trading (MT5) ─────────────────────────────────────────────────────────────
+
+export const tradingApi = {
+  getStatus:    () => api.get("/trading/status"),
+  connect:      (account: number, password: string, server: string, path?: string) =>
+    api.post("/trading/connect", { account, password, server, path }),
+  disconnect:   () => api.post("/trading/disconnect"),
+  getConfig:    () => api.get("/trading/config"),
+  updateConfig: (updates: Record<string, unknown>) => api.put("/trading/config", updates),
+  executeSignal:(signalId: number) => api.post(`/trading/execute/${signalId}`),
+  getPositions: () => api.get("/trading/positions"),
+  closePosition:(ticket: number) => api.post(`/trading/positions/${ticket}/close`),
+  getExecutions:(limit?: number) => api.get("/trading/executions", { params: { limit } }),
 };
 
 // ── WebSocket helpers ─────────────────────────────────────────────────────────

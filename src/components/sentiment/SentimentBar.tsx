@@ -10,7 +10,9 @@ interface SentimentBarProps {
 export default function SentimentBar({ summary }: SentimentBarProps) {
   const compound = summary.avg_compound; // -1 to 1
   const pct = ((compound + 1) / 2) * 100; // map to 0-100
-  const label = summary.dominant_sentiment.toLowerCase();
+  const label =
+    summary.dominant_sentiment?.toLowerCase() ??
+    (compound > 0.05 ? "positive" : compound < -0.05 ? "negative" : "neutral");
 
   const color =
     label === "positive"

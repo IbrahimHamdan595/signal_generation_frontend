@@ -149,7 +149,7 @@ function ResultView({ result }: { result: BacktestResult }) {
               <Tooltip
                 contentStyle={{ background: "#1a1f2e", border: "1px solid #2a3040", borderRadius: 8, fontSize: 12 }}
                 labelStyle={{ color: "#9ca3af" }}
-                formatter={(v: number) => [formatPrice(v), "Equity"]}
+                formatter={(v) => [formatPrice(Number(v)), "Equity"]}
               />
               <Area
                 type="monotone"

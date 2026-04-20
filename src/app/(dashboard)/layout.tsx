@@ -7,7 +7,7 @@ import Sidebar from "@/components/layout/Sidebar";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, hydrate } = useAuthStore();
+  const { isAuthenticated, hydrated, hydrate } = useAuthStore();
   const router = useRouter();
   useKeyboardShortcuts();
 
@@ -16,11 +16,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [hydrate]);
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      const token = localStorage.getItem("access_token");
-      if (!token) router.replace("/login");
-    }
-  }, [isAuthenticated, router]);
+    if (!hydrated) return;
+    if (!isAuthenticated) router.replace("/login");
+  }, [hydrated, isAuthenticated, router]);
 
   return (
     <div className="flex h-full min-h-screen" style={{ backgroundColor: "var(--bg-base)" }}>

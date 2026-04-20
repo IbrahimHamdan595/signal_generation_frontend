@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Providers from "./providers";
 import Script from "next/script";
@@ -7,8 +7,11 @@ export const metadata: Metadata = {
   title: "Signal — AI Trading Dashboard",
   description: "Multimodal AI trading signal platform",
   manifest: "/manifest.json",
-  themeColor: "#3b82f6",
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Signal" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#3b82f6",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -70,10 +70,14 @@ export interface SentimentSnapshotResponse {
 
 export interface SentimentSummaryResponse {
   ticker: string;
-  dominant_sentiment: string;
   avg_compound: number;
-  article_count: number;
-  latest_article_at: string | null;
+  avg_positive: number;
+  avg_negative: number;
+  avg_neutral: number;
+  // These may be present depending on query path
+  dominant_sentiment?: string;
+  article_count?: number;
+  latest_article_at?: string | null;
 }
 
 export interface SentimentArticleResponse {

@@ -15,6 +15,8 @@ import {
   X,
   Settings,
   Briefcase,
+  Workflow,
+  CandlestickChart,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
 import { useRouter } from "next/navigation";
@@ -27,6 +29,8 @@ const nav = [
   { href: "/model", label: "Model", icon: Brain },
   { href: "/watchlist", label: "Watchlist", icon: Star },
   { href: "/portfolio", label: "Portfolio", icon: Briefcase },
+  { href: "/trading", label: "Trading", icon: CandlestickChart },
+  { href: "/pipeline", label: "Pipeline", icon: Workflow },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

@@ -3,17 +3,16 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import SignalsTable from "@/components/signals/SignalsTable";
 import { useAllSignals, useGenerateBatchSignals } from "@/hooks/useSignals";
 import { useOutcomes } from "@/hooks/useOutcomes";
+import { useTradingStatus, useExecuteSignal } from "@/hooks/useTrading";
 import type { Action, SignalResponse, SignalOutcome } from "@/types";
 import Header from "@/components/layout/Header";
-import { Filter, RefreshCw, Zap, Download } from "lucide-react";
+import { Filter, RefreshCw, Zap, Download, ArrowUpRight, PlayCircle } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatPrice, formatPercent, formatDate } from "@/lib/utils";
 import { ActionBadge, Badge } from "@/components/ui/Badge";
 import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
 
 const ACTION_FILTERS: (Action | "ALL")[] = ["ALL", "BUY", "SELL", "HOLD"];
 
@@ -26,9 +25,15 @@ function OutcomeBadge({ outcome }: { outcome: SignalOutcome["outcome"] }) {
 function SignalsWithOutcomesTable({
   signals,
   outcomeMap,
+  mt5Connected,
+  onExecute,
+  executing,
 }: {
   signals: SignalResponse[];
   outcomeMap: Record<string, SignalOutcome>;
+  mt5Connected: boolean;
+  onExecute: (id: number) => void;
+  executing: boolean;
 }) {
   return (
     <div className="overflow-x-auto">
@@ -50,6 +55,7 @@ function SignalsWithOutcomesTable({
         <tbody>
           {signals.map((s) => {
             const outcome = outcomeMap[s.id];
+            const canExecute = mt5Connected && (s.action === "BUY" || s.action === "SELL");
             return (
               <tr
                 key={s.id}
@@ -94,12 +100,24 @@ function SignalsWithOutcomesTable({
                   {formatDate(s.created_at)}
                 </td>
                 <td className="py-3 pl-2">
-                  <Link
-                    href={`/market/${s.ticker}`}
-                    className="text-muted hover:text-accent transition-colors"
-                  >
-                    <ArrowUpRight size={14} />
-                  </Link>
+                  <div className="flex items-center gap-1.5 justify-end">
+                    {canExecute && (
+                      <button
+                        onClick={() => onExecute(Number(s.id))}
+                        disabled={executing}
+                        title="Execute via MT5"
+                        className="flex items-center gap-1 px-2 py-1 rounded text-xs text-accent border border-accent/20 hover:bg-accent/10 transition-colors disabled:opacity-40"
+                      >
+                        <PlayCircle size={11} /> Execute
+                      </button>
+                    )}
+                    <Link
+                      href={`/market/${s.ticker}`}
+                      className="text-muted hover:text-accent transition-colors"
+                    >
+                      <ArrowUpRight size={14} />
+                    </Link>
+                  </div>
                 </td>
               </tr>
             );
@@ -144,6 +162,9 @@ export default function SignalsPage() {
   const { data: allSignals, isLoading } = useAllSignals();
   const { data: outcomes = [] } = useOutcomes();
   const { mutate: generateBatch, isPending: generating } = useGenerateBatchSignals();
+  const { data: tradingStatus } = useTradingStatus();
+  const { mutate: executeSignal, isPending: executing } = useExecuteSignal();
+  const mt5Connected = tradingStatus?.connected ?? false;
   const [actionFilter, setActionFilter] = useState<Action | "ALL">("ALL");
   const [minConf, setMinConf] = useState(0);
   const [search, setSearch] = useState("");
@@ -272,7 +293,13 @@ export default function SignalsPage() {
               ))}
             </div>
           ) : filtered.length > 0 ? (
-            <SignalsWithOutcomesTable signals={filtered} outcomeMap={outcomeMap} />
+            <SignalsWithOutcomesTable
+              signals={filtered}
+              outcomeMap={outcomeMap}
+              mt5Connected={mt5Connected}
+              onExecute={(id) => executeSignal(id)}
+              executing={executing}
+            />
           ) : (
             <p className="text-sm text-muted text-center py-10">
               No signals match your filters

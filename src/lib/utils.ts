@@ -34,7 +34,9 @@ export function formatDate(value: string | null | undefined): string {
 
 export function formatRelative(value: string | null | undefined): string {
   if (!value) return "—";
-  return formatDistanceToNow(new Date(value), { addSuffix: true });
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return "—";
+  return formatDistanceToNow(d, { addSuffix: true });
 }
 
 export function actionColor(action: Action): string {
