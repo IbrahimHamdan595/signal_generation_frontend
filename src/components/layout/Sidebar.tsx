@@ -14,38 +14,42 @@ import {
   Menu,
   X,
   Settings,
-  Briefcase,
   Workflow,
   CandlestickChart,
+  Activity,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const nav = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/signals", label: "Signals", icon: TrendingUp },
-  { href: "/market", label: "Market", icon: BarChart2 },
-  { href: "/model", label: "Model", icon: Brain },
-  { href: "/watchlist", label: "Watchlist", icon: Star },
-  { href: "/portfolio", label: "Portfolio", icon: Briefcase },
-  { href: "/trading", label: "Trading", icon: CandlestickChart },
-  { href: "/pipeline", label: "Pipeline", icon: Workflow },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/",           label: "Dashboard", icon: LayoutDashboard },
+  { href: "/signals",    label: "Signals",   icon: TrendingUp },
+  { href: "/market",     label: "Market",    icon: BarChart2 },
+  { href: "/model",      label: "Model",     icon: Brain },
+  { href: "/watchlist",  label: "Watchlist", icon: Star },
+  { href: "/trading",    label: "Trading",   icon: CandlestickChart },
+  { href: "/live-edge",  label: "Live Edge", icon: Activity },
+  { href: "/pipeline",   label: "Pipeline",  icon: Workflow },
+  { href: "/settings",   label: "Settings",  icon: Settings },
 ];
 
-function SidebarContent({ onClose }: { onClose?: () => void }) {
-  const pathname = usePathname();
-  const clearAuth = useAuthStore((s) => s.clearAuth);
-  const router = useRouter();
+interface SidebarContentProps {
+  onClose?: () => void;
+  onLogout: () => void;
+}
 
-  function handleLogout() {
-    clearAuth();
-    router.push("/login");
-  }
+function SidebarContent({ onClose, onLogout }: SidebarContentProps) {
+  const pathname = usePathname();
+
+  // Delay active-class calculation until after mount so the server-rendered
+  // HTML (where pathname can differ from client) matches exactly, preventing
+  // React hydration from partially re-rendering the nav list.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Logo */}
       <div className="flex items-center justify-between px-5 py-5 border-b border-border">
         <div className="flex items-center gap-2.5">
@@ -65,9 +69,11 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5">
+      <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-4 space-y-0.5">
         {nav.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || (href !== "/" && pathname.startsWith(href));
+          const active =
+            mounted &&
+            (pathname === href || (href !== "/" && pathname.startsWith(href)));
           return (
             <Link
               key={href}
@@ -90,7 +96,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
       {/* Footer */}
       <div className="px-3 pb-4 border-t border-border pt-3">
         <button
-          onClick={handleLogout}
+          onClick={onLogout}
           className="flex items-center gap-3 px-3 py-2.5 w-full rounded-lg text-sm text-muted hover:text-sell hover:bg-sell/5 transition-colors"
         >
           <LogOut size={17} />
@@ -103,6 +109,16 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
 
 export default function Sidebar() {
   const [open, setOpen] = useState(false);
+
+  // Own the store subscription here — isolated from SidebarContent so that
+  // a Zustand re-render (triggered by hydrate()) never touches the nav list.
+  const clearAuth = useAuthStore((s) => s.clearAuth);
+  const router = useRouter();
+
+  function handleLogout() {
+    clearAuth();
+    router.push("/login");
+  }
 
   return (
     <>
@@ -129,12 +145,12 @@ export default function Sidebar() {
           open ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <SidebarContent onClose={() => setOpen(false)} />
+        <SidebarContent onClose={() => setOpen(false)} onLogout={handleLogout} />
       </aside>
 
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex flex-col w-60 h-screen fixed left-0 top-0 border-r border-border bg-card z-30">
-        <SidebarContent />
+        <SidebarContent onLogout={handleLogout} />
       </aside>
     </>
   );

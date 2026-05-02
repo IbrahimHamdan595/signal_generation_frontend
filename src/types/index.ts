@@ -18,6 +18,23 @@ export interface SignalResponse {
   prob_hold: number | null;
   source: string;
   created_at: string;
+  // v2 all-predictable fields
+  entry_offset_pct: number | null;
+  timing_bucket: number | null;
+  timing_bucket_label: string | null;
+  predicted: {
+    entry_offset_pct: number;
+    sl_pct: number;
+    tp_pct: number;
+    net_pct: number;
+    bars_to_entry: number;
+  } | null;
+  timing: {
+    bucket: number;
+    bucket_label: string;
+    bars: number;
+    probs: number[];
+  } | null;
 }
 
 export interface OHLCVResponse {

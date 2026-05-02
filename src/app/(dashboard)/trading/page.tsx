@@ -13,11 +13,12 @@ import {
   useMT5Positions,
   useClosePosition,
   useExecutions,
+  useRunNow,
 } from "@/hooks/useTrading";
 import { formatNumber } from "@/lib/utils";
 import {
   Wifi, WifiOff, Shield, TrendingUp, TrendingDown,
-  X, Settings, Activity,
+  X, Settings, Activity, Zap,
 } from "lucide-react";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -48,11 +49,16 @@ function PnlSpan({ value }: { value: number }) {
 
 // ── Connect form ──────────────────────────────────────────────────────────────
 
-function ConnectForm() {
-  const [account, setAccount]   = useState("");
+function ConnectForm({ savedAccount, savedServer }: {
+  savedAccount?: number | null;
+  savedServer?: string | null;
+}) {
+  const [account, setAccount]   = useState(savedAccount ? String(savedAccount) : "");
   const [password, setPassword] = useState("");
-  const [server, setServer]     = useState("");
+  const [server, setServer]     = useState(savedServer ?? "");
   const { mutate: connect, isPending } = useConnect();
+
+  const isReconnect = !!savedAccount;
 
   function handleSubmit(e: React.SyntheticEvent) {
     e.preventDefault();
@@ -64,8 +70,24 @@ function ConnectForm() {
   return (
     <Card glow="accent">
       <CardHeader>
-        <CardTitle>Connect to MetaTrader 5</CardTitle>
+        <div className="flex items-center gap-2">
+          {isReconnect && (
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs bg-amber-400/10 text-amber-400 border border-amber-400/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+              Session lost — reconnect
+            </span>
+          )}
+          <CardTitle>{isReconnect ? "Reconnect to MetaTrader 5" : "Connect to MetaTrader 5"}</CardTitle>
+        </div>
       </CardHeader>
+
+      {isReconnect && (
+        <p className="text-xs text-amber-400/80 mt-2 mb-1">
+          Account #{savedAccount} ({savedServer}) was previously connected.
+          Enter your password to restore the session.
+        </p>
+      )}
+
       <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
         <input
           type="number"
@@ -81,6 +103,7 @@ function ConnectForm() {
           onChange={(e) => setPassword(e.target.value)}
           placeholder="Password"
           required
+          autoFocus={isReconnect}
           className="bg-surface border border-border rounded-lg px-3 py-2.5 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-accent/60 transition-colors"
         />
         <input
@@ -93,7 +116,7 @@ function ConnectForm() {
         />
         <div className="sm:col-span-3">
           <Button type="submit" loading={isPending} className="w-full justify-center">
-            <Wifi size={15} /> Connect
+            <Wifi size={15} /> {isReconnect ? "Reconnect" : "Connect"}
           </Button>
         </div>
       </form>
@@ -168,7 +191,7 @@ function RiskConfig() {
             <span className="text-xs text-muted">Min confidence</span>
             <input
               type="number" value={minConf} onChange={(e) => setMinConf(e.target.value)}
-              min="0.5" max="1" step="0.05"
+              min="0.3" max="1" step="0.05"
               className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-accent/60 transition-colors"
             />
           </label>
@@ -218,10 +241,17 @@ function RiskConfig() {
 
 export default function TradingPage() {
   const { data: status, isLoading: loadingStatus } = useTradingStatus();
+  const { data: config } = useTradingConfig();
   const { data: positions = [], isLoading: loadingPositions } = useMT5Positions();
-  const { data: executions = [], isLoading: loadingExec } = useExecutions(50);
+  const [execPage, setExecPage] = useState(0);
+  const PAGE_SIZE = 20;
+  const { data: execData, isLoading: loadingExec } = useExecutions(execPage, PAGE_SIZE);
+  const executions = execData?.items ?? [];
+  const execTotal  = execData?.total ?? 0;
+  const totalPages = Math.ceil(execTotal / PAGE_SIZE);
   const { mutate: disconnect, isPending: disconnecting } = useDisconnect();
   const { mutate: closePos, isPending: closing } = useClosePosition();
+  const { mutate: runNow, isPending: running } = useRunNow();
 
   const connected = status?.connected ?? false;
   const account   = status?.account;
@@ -257,20 +287,35 @@ export default function TradingPage() {
               )}
             </div>
             {connected && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => disconnect()}
-                loading={disconnecting}
-              >
-                <WifiOff size={14} /> Disconnect
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => runNow()}
+                  loading={running}
+                  title="Regenerate signals and auto-execute"
+                >
+                  <Zap size={14} /> Generate &amp; Trade
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => disconnect()}
+                  loading={disconnecting}
+                >
+                  <WifiOff size={14} /> Disconnect
+                </Button>
+              </div>
             )}
           </div>
         </Card>
 
         {/* Connect form — shown when not connected */}
-        {!loadingStatus && !connected && <ConnectForm />}
+        {!loadingStatus && !connected && (
+          <ConnectForm
+            savedAccount={config?.mt5_account}
+            savedServer={config?.mt5_server}
+          />
+        )}
 
         {/* Risk config — always visible once configured */}
         {(connected || status?.account) && <RiskConfig />}
@@ -357,9 +402,35 @@ export default function TradingPage() {
         {/* Execution history */}
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2">
-              <Shield size={15} className="text-muted" />
-              <CardTitle>Execution History</CardTitle>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Shield size={15} className="text-muted" />
+                <CardTitle>Execution History</CardTitle>
+                {execTotal > 0 && (
+                  <span className="text-xs text-muted">({execTotal} total)</span>
+                )}
+              </div>
+              {totalPages > 1 && (
+                <div className="flex items-center gap-2 text-xs text-muted">
+                  <button
+                    onClick={() => setExecPage((p) => Math.max(0, p - 1))}
+                    disabled={execPage === 0}
+                    className="px-2 py-1 rounded border border-border hover:bg-surface disabled:opacity-30 transition-colors"
+                  >
+                    ‹ Prev
+                  </button>
+                  <span className="text-ink">
+                    {execPage + 1} / {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setExecPage((p) => Math.min(totalPages - 1, p + 1))}
+                    disabled={execPage >= totalPages - 1}
+                    className="px-2 py-1 rounded border border-border hover:bg-surface disabled:opacity-30 transition-colors"
+                  >
+                    Next ›
+                  </button>
+                </div>
+              )}
             </div>
           </CardHeader>
 
@@ -374,54 +445,109 @@ export default function TradingPage() {
               No executions yet — connect MT5 and execute a signal to get started
             </p>
           ) : (
-            <div className="overflow-x-auto mt-2">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-xs text-muted border-b border-border">
-                    <th className="text-left py-2 pr-4">Symbol</th>
-                    <th className="text-left py-2 pr-4">Side</th>
-                    <th className="text-right py-2 pr-4">Volume</th>
-                    <th className="text-right py-2 pr-4">Fill Price</th>
-                    <th className="text-right py-2 pr-4">Status</th>
-                    <th className="text-right py-2 pr-4">P&L</th>
-                    <th className="text-right py-2">Time</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {executions.map((e) => (
-                    <tr key={e.id} className="border-b border-border/50 hover:bg-surface/50 transition-colors">
-                      <td className="py-2.5 pr-4 font-mono font-semibold text-ink">{e.symbol}</td>
-                      <td className="py-2.5 pr-4">
-                        <span className={`text-xs font-semibold ${e.order_type === "BUY" ? "text-buy" : "text-sell"}`}>
-                          {e.order_type}
-                        </span>
-                      </td>
-                      <td className="text-right py-2.5 pr-4 text-ink">{e.volume ?? "—"}</td>
-                      <td className="text-right py-2.5 pr-4 text-muted">
-                        {e.fill_price != null ? formatNumber(e.fill_price, 5) : "—"}
-                      </td>
-                      <td className="text-right py-2.5 pr-4">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                          e.status === "filled"
-                            ? "bg-buy/10 text-buy border border-buy/20"
-                            : e.status === "closed"
-                            ? "bg-muted/10 text-muted border border-border"
-                            : "bg-sell/10 text-sell border border-sell/20"
-                        }`}>
-                          {e.status}
-                        </span>
-                      </td>
-                      <td className="text-right py-2.5 pr-4">
-                        {e.pnl != null ? <PnlSpan value={e.pnl} /> : <span className="text-muted">—</span>}
-                      </td>
-                      <td className="text-right py-2.5 text-xs text-muted">
-                        {new Date(e.created_at).toLocaleString()}
-                      </td>
+            <>
+              <div className="overflow-x-auto mt-2">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-xs text-muted border-b border-border">
+                      <th className="text-left py-2 pr-4">Symbol</th>
+                      <th className="text-left py-2 pr-4">Side</th>
+                      <th className="text-right py-2 pr-4">Volume</th>
+                      <th className="text-right py-2 pr-4">Fill Price</th>
+                      <th className="text-right py-2 pr-4">Status</th>
+                      <th className="text-right py-2 pr-4">P&L</th>
+                      <th className="text-right py-2">Time</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {executions.map((e) => (
+                      <tr key={e.id} className="border-b border-border/50 hover:bg-surface/50 transition-colors">
+                        <td className="py-2.5 pr-4 font-mono font-semibold text-ink">{e.symbol}</td>
+                        <td className="py-2.5 pr-4">
+                          <span className={`text-xs font-semibold ${e.order_type === "BUY" ? "text-buy" : "text-sell"}`}>
+                            {e.order_type}
+                          </span>
+                        </td>
+                        <td className="text-right py-2.5 pr-4 text-ink">{e.volume ?? "—"}</td>
+                        <td className="text-right py-2.5 pr-4 text-muted">
+                          {e.fill_price != null ? formatNumber(e.fill_price, 5) : "—"}
+                        </td>
+                        <td className="text-right py-2.5 pr-4">
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                            e.status === "filled"
+                              ? "bg-buy/10 text-buy border border-buy/20"
+                              : e.status === "closed"
+                              ? "bg-muted/10 text-muted border border-border"
+                              : "bg-sell/10 text-sell border border-sell/20"
+                          }`}>
+                            {e.status}
+                          </span>
+                        </td>
+                        <td className="text-right py-2.5 pr-4">
+                          {e.pnl != null ? <PnlSpan value={e.pnl} /> : <span className="text-muted">—</span>}
+                        </td>
+                        <td className="text-right py-2.5 text-xs text-muted">
+                          {new Date(e.created_at).toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between mt-3 pt-3 border-t border-border text-xs text-muted">
+                  <span>
+                    Showing {execPage * PAGE_SIZE + 1}–{Math.min((execPage + 1) * PAGE_SIZE, execTotal)} of {execTotal}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setExecPage(0)}
+                      disabled={execPage === 0}
+                      className="px-2 py-1 rounded border border-border hover:bg-surface disabled:opacity-30 transition-colors"
+                    >
+                      «
+                    </button>
+                    <button
+                      onClick={() => setExecPage((p) => Math.max(0, p - 1))}
+                      disabled={execPage === 0}
+                      className="px-2 py-1 rounded border border-border hover:bg-surface disabled:opacity-30 transition-colors"
+                    >
+                      ‹
+                    </button>
+                    {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                      const p = Math.max(0, Math.min(execPage - 2, totalPages - 5)) + i;
+                      return (
+                        <button
+                          key={p}
+                          onClick={() => setExecPage(p)}
+                          className={`px-2 py-1 rounded border transition-colors ${
+                            p === execPage
+                              ? "border-accent/40 bg-accent/10 text-accent"
+                              : "border-border hover:bg-surface text-muted"
+                          }`}
+                        >
+                          {p + 1}
+                        </button>
+                      );
+                    })}
+                    <button
+                      onClick={() => setExecPage((p) => Math.min(totalPages - 1, p + 1))}
+                      disabled={execPage >= totalPages - 1}
+                      className="px-2 py-1 rounded border border-border hover:bg-surface disabled:opacity-30 transition-colors"
+                    >
+                      ›
+                    </button>
+                    <button
+                      onClick={() => setExecPage(totalPages - 1)}
+                      disabled={execPage >= totalPages - 1}
+                      className="px-2 py-1 rounded border border-border hover:bg-surface disabled:opacity-30 transition-colors"
+                    >
+                      »
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </Card>
 

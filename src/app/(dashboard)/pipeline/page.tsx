@@ -64,6 +64,27 @@ const INITIAL_STEP: StepState = { status: "idle", done: 0, total: 0, errors: [] 
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
+// Retry failed API calls with exponential backoff and max attempts
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxAttempts: number = 5,
+  initialDelayMs: number = 1000
+): Promise<T> {
+  let lastError: Error | null = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err as Error;
+      if (attempt === maxAttempts) throw err;
+      const delayMs = initialDelayMs * Math.pow(2, attempt - 1);
+      console.warn(`⚠️  Attempt ${attempt}/${maxAttempts} failed, retrying in ${delayMs}ms...`, lastError.message);
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  throw lastError || new Error("Max retries exceeded");
+}
+
 function StepIcon({ status }: { status: StepStatus }) {
   if (status === "running") return <Loader2 size={18} className="text-hold animate-spin" />;
   if (status === "done") return <CheckCircle2 size={18} className="text-buy" />;
@@ -139,6 +160,14 @@ export default function PipelinePage() {
     try {
       const saved = localStorage.getItem("pipeline_selected_tickers");
       if (saved) setSelected(new Set<string>(JSON.parse(saved)));
+
+      // Restore checkpoint if page was refreshed during pipeline run
+      const checkpoint = localStorage.getItem("pipeline_checkpoint");
+      if (checkpoint) {
+        const parsed = JSON.parse(checkpoint);
+        setLastCheckpoint(parsed);
+        setConnectionLost(true);
+      }
     } catch { /* ignore */ }
   }, []);
 
@@ -156,6 +185,11 @@ export default function PipelinePage() {
   const [ingestJobId, setIngestJobId] = useState<number | null>(null);
   const [trainJobId, setTrainJobId] = useState<number | null>(null);
   const [pipelineResult, setPipelineResult] = useState<PipelineResult | null>(null);
+  // Persisted so resume buttons work after a step errors
+  const [step1Tickers, setStep1Tickers] = useState<string[]>([]);
+  const [sentimentDone, setSentimentDone] = useState<Set<string>>(new Set());
+  const [lastCheckpoint, setLastCheckpoint] = useState<any>(null);
+  const [connectionLost, setConnectionLost] = useState(false);
 
   const { data: trainJob } = useJobStatus(trainJobId);
 
@@ -217,28 +251,118 @@ export default function PipelinePage() {
     setSelected(new Set());
   }
 
-  // Poll a job by ID until terminal state, updating ohlcvStep progress along the way
+  // Poll a job by ID until terminal state, updating ohlcvStep progress along the way (with retry on connection loss)
   async function pollIngestJob(jobId: number): Promise<{ done: number; failed: string[] }> {
     while (true) {
-      const res = await jobsApi.get(String(jobId));
-      const job = res.data;
-      const p = job.progress ?? {};
+      try {
+        const res = await retryWithBackoff(() => jobsApi.get(String(jobId)), 5, 1000);
+        const job = res.data;
+        const p = job.progress ?? {};
 
-      setOhlcvStep({
-        status: "running",
-        done: p.done ?? 0,
-        total: p.total ?? selectedArray.length,
-        errors: p.failed_tickers ?? [],
-      });
+        setOhlcvStep({
+          status: "running",
+          done: p.done ?? 0,
+          total: p.total ?? selectedArray.length,
+          errors: p.failed_tickers ?? [],
+        });
 
-      if (job.status === "completed") {
-        return { done: p.done ?? 0, failed: p.failed_tickers ?? [] };
+        if (job.status === "completed") {
+          return { done: p.done ?? 0, failed: p.failed_tickers ?? [] };
+        }
+        if (job.status === "failed") {
+          throw new Error(job.error ?? "Ingest job failed");
+        }
+
+        await new Promise((r) => setTimeout(r, 3_000));
+      } catch (err) {
+        console.error("❌ Connection lost during OHLCV polling:", err);
+        localStorage.setItem("pipeline_checkpoint", JSON.stringify({
+          step: "ohlcv",
+          jobId,
+          timestamp: Date.now(),
+        }));
+        throw err;
       }
-      if (job.status === "failed") {
-        throw new Error(job.error ?? "Ingest job failed");
-      }
+    }
+  }
 
-      await new Promise((r) => setTimeout(r, 3_000));
+  // Poll sentiment jobs until all complete or fail (with retry on connection loss)
+  // Returns the actual list of tickers that completed sentiment enrichment so
+  // training can be restricted to ticker-data that's actually been enriched.
+  async function pollSentimentJobs(
+    jobIds: number[],
+    totalTickers: number,
+  ): Promise<{ completedTickers: string[]; failedTickers: string[]; errors: string[] }> {
+    const errorMessages: string[] = [];
+    while (true) {
+      try {
+        if (jobIds.length === 0) {
+          setSentimentStep((s) => ({ ...s, done: totalTickers, status: "done" }));
+          return { completedTickers: [], failedTickers: [], errors: errorMessages };
+        }
+
+        const statuses = await retryWithBackoff(
+          () => Promise.all(
+            jobIds.map((id) => jobsApi.get(String(id)).then((r) => ({ id, ...r.data })))
+          ),
+          5,
+          1000
+        );
+
+        // Count tickers (not batch-jobs) — each job's progress.done is per-ticker.
+        // For completed jobs, prefer the result.success / result.failed_tickers lists
+        // so we know exactly which tickers ended up in the daily_sentiment table.
+        const completedTickers = new Set<string>();
+        const failedTickers = new Set<string>();
+        let liveDone = 0;
+        let liveFailed = 0;
+
+        for (const job of statuses) {
+          if (job.status === "completed") {
+            const success: string[] = job.result?.success ?? job.progress?.completed ?? [];
+            const failed: string[] = job.result?.failed_tickers ?? [];
+            success.forEach((t) => completedTickers.add(t));
+            failed.forEach((t) => failedTickers.add(t));
+          } else if (job.status === "failed") {
+            if (job.error) errorMessages.push(job.error);
+          } else {
+            // running — read live per-ticker progress
+            liveDone += job.progress?.done ?? 0;
+            liveFailed += job.progress?.failed ?? 0;
+            (job.progress?.completed ?? []).forEach((t: string) => completedTickers.add(t));
+          }
+        }
+
+        const doneTickers = completedTickers.size + failedTickers.size + liveDone + liveFailed;
+        setSentimentStep((s) => ({
+          ...s,
+          done: Math.min(doneTickers, totalTickers),
+          total: totalTickers,
+          errors: errorMessages,
+        }));
+
+        const finishedJobs = statuses.filter(
+          (s) => s.status === "completed" || s.status === "failed"
+        ).length;
+        if (finishedJobs === jobIds.length) {
+          return {
+            completedTickers: Array.from(completedTickers),
+            failedTickers: Array.from(failedTickers),
+            errors: errorMessages,
+          };
+        }
+
+        await new Promise((r) => setTimeout(r, 5_000));
+      } catch (err) {
+        console.error("❌ Connection lost during sentiment polling:", err);
+        localStorage.setItem("pipeline_checkpoint", JSON.stringify({
+          step: "sentiment",
+          jobIds,
+          totalTickers,
+          timestamp: Date.now(),
+        }));
+        throw err;
+      }
     }
   }
 
@@ -253,6 +377,8 @@ export default function PipelinePage() {
   const canResume = alreadyIngested.length > 0 && alreadyIngested.length === selectedArray.length;
 
   async function runSentimentAndTrain(tickersToUse: string[]) {
+    setStep1Tickers(tickersToUse);
+    setSentimentDone(new Set());
     setSentimentStep(INITIAL_STEP);
     setTrainStep(INITIAL_STEP);
     setTrainJobId(null);
@@ -262,57 +388,120 @@ export default function PipelinePage() {
     await runFromStep2(tickersToUse);
   }
 
+  async function runFromStep3(tickersToUse: string[]) {
+    // Restrict to tickers that actually have daily_sentiment rows, so the
+    // model trains only on enriched data — falling back to the input list
+    // if the lookup fails (offline / endpoint error).
+    const enriched = await sentimentApi.getDailyTickers()
+      .then((r) => new Set<string>(r.data))
+      .catch(() => new Set<string>(tickersToUse));
+    const filtered = tickersToUse.filter((t) => enriched.has(t));
+    const trainTickers = (filtered.length > 0 ? filtered : tickersToUse).slice(0, 100);
+    setTrainStep({ status: "running", done: 0, total: trainTickers.length, errors: [] });
+    setTrainJobId(null);
+    setPipelineResult(null);
+    setResultFetched(false);
+    try {
+      const { job_id } = await startTraining({ tickers: trainTickers, epochs });
+      setTrainJobId(job_id);
+      setTrainStep((s) => ({ ...s, done: trainTickers.length }));
+    } catch {
+      setTrainStep((s) => ({ ...s, status: "error" }));
+    }
+  }
+
+  // Recover from checkpoint saved during connection loss
+  async function recoverFromCheckpoint() {
+    if (!lastCheckpoint) return;
+    setConnectionLost(false);
+    const { step, ...data } = lastCheckpoint;
+
+    try {
+      if (step === "ohlcv") {
+        // Resume polling OHLCV job
+        setOhlcvStep({ status: "running", done: 0, total: selectedArray.length, errors: [] });
+        const { done, failed } = await pollIngestJob(data.jobId);
+        const successfulTickers = selectedArray.filter((t) => !failed.includes(t));
+        setStep1Tickers(successfulTickers);
+        setOhlcvStep({ status: done === 0 ? "error" : "done", done, total: selectedArray.length, errors: failed });
+        if (done > 0) await runFromStep2(successfulTickers);
+      } else if (step === "sentiment") {
+        // Resume polling sentiment jobs
+        setSentimentStep({ status: "running", done: 0, total: data.totalTickers, errors: [] });
+        const { completedTickers, errors } = await pollSentimentJobs(data.jobIds, data.totalTickers);
+        const enriched = completedTickers.length;
+        setSentimentDone(new Set(completedTickers));
+        setSentimentStep({
+          status: enriched === 0 ? "error" : "done",
+          done: enriched,
+          total: data.totalTickers,
+          errors,
+        });
+        if (enriched > 0) await runFromStep3(completedTickers);
+      } else if (step === "sentiment_dispatch") {
+        // Restart sentiment from dispatch
+        await runFromStep2(data.tickers);
+      }
+      localStorage.removeItem("pipeline_checkpoint");
+    } catch (err) {
+      console.error("❌ Recovery failed:", err);
+      setSentimentStep((s) => ({ ...s, status: "error" }));
+    }
+  }
+
   async function runFromStep2(successfulTickers: string[]) {
     // ── Step 2: Daily sentiment ──────────────────────────────────────
     setSentimentStep({ status: "running", done: 0, total: successfulTickers.length, errors: [] });
+    localStorage.setItem("pipeline_checkpoint", JSON.stringify({
+      step: "sentiment_dispatch",
+      tickers: successfulTickers,
+      periodYears,
+      timestamp: Date.now(),
+    }));
     try {
       const { job_ids, errors: dispatchErrors } = await buildDailySentiment({
         tickers: successfulTickers,
         years: periodYears,
       });
 
-      const perJobDone: Record<number, number> = {};
-      const perJobFailed: Record<number, number> = {};
+      // If all dispatches failed, early exit
+      if (dispatchErrors.length === successfulTickers.length) {
+        setSentimentStep({ status: "error", done: 0, total: successfulTickers.length, errors: dispatchErrors });
+        return;
+      }
 
-      const updateSentimentProgress = () => {
-        const done = Object.values(perJobDone).reduce((a, b) => a + b, 0) + dispatchErrors.length;
-        setSentimentStep({ status: "running", done, total: successfulTickers.length, errors: [] });
-      };
-
-      await Promise.all(
-        job_ids.map(async (jid: number) => {
-          perJobDone[jid] = 0;
-          perJobFailed[jid] = 0;
-          while (true) {
-            const res = await jobsApi.get(String(jid));
-            const job = res.data;
-            const p = job.progress ?? {};
-            perJobDone[jid] = p.current ?? p.done ?? 0;
-            perJobFailed[jid] = p.failed ?? 0;
-            updateSentimentProgress();
-            if (job.status === "completed" || job.status === "failed") {
-              perJobDone[jid] = p.done ?? p.current ?? 0;
-              updateSentimentProgress();
-              break;
-            }
-            await new Promise((r) => setTimeout(r, 3_000));
-          }
-        })
+      // Wait for all sentiment jobs to complete before proceeding to training
+      const { completedTickers, errors: jobErrors } = await pollSentimentJobs(
+        job_ids,
+        successfulTickers.length,
       );
+      const completedSet = new Set(completedTickers);
+      setSentimentDone(completedSet);
 
-      const totalDone = Object.values(perJobDone).reduce((a, b) => a + b, 0);
+      if (completedSet.size === 0) {
+        setSentimentStep({ status: "error", done: 0, total: successfulTickers.length, errors: jobErrors });
+        return;
+      }
+
       setSentimentStep({
-        status: totalDone === 0 && dispatchErrors.length > 0 ? "error" : "done",
-        done: totalDone,
+        status: "done",
+        done: completedSet.size,
         total: successfulTickers.length,
-        errors: dispatchErrors,
+        errors: jobErrors,
       });
     } catch {
       setSentimentStep((s) => ({ ...s, status: "error" }));
+      return;  // don't start training on exception
     }
 
     // ── Step 3: Train ────────────────────────────────────────────────
-    const trainTickers = successfulTickers.slice(0, 100);
+    // Train only on tickers that have ACTUAL daily sentiment data,
+    // preserving the user-selected order. (sentimentDone set above.)
+    const enrichedFromSentiment = await sentimentApi.getDailyTickers().then(
+      (r) => new Set<string>(r.data),
+    ).catch(() => sentimentDone);
+    const enrichedTickers = successfulTickers.filter((t) => enrichedFromSentiment.has(t));
+    const trainTickers = (enrichedTickers.length > 0 ? enrichedTickers : successfulTickers).slice(0, 100);
     setTrainStep({ status: "running", done: 0, total: trainTickers.length, errors: [] });
     try {
       const { job_id } = await startTraining({ tickers: trainTickers, epochs });
@@ -323,9 +512,22 @@ export default function PipelinePage() {
     }
   }
 
+  async function trainOnly() {
+    if (ingestedTickers.length === 0 || isRunning) return;
+    setShowList(false);
+    setConnectionLost(false);
+    localStorage.removeItem("pipeline_checkpoint");
+    // Mark steps 1+2 as already done (data is in DB)
+    setOhlcvStep({ status: "done", done: ingestedTickers.length, total: ingestedTickers.length, errors: [] });
+    setSentimentStep({ status: "done", done: ingestedTickers.length, total: ingestedTickers.length, errors: [] });
+    await runFromStep3(ingestedTickers);
+  }
+
   async function runPipeline() {
     if (selectedArray.length === 0 || isRunning) return;
     setShowList(false);
+    setConnectionLost(false);
+    localStorage.removeItem("pipeline_checkpoint");
 
     // Reset all steps before re-run
     setOhlcvStep(INITIAL_STEP);
@@ -344,6 +546,7 @@ export default function PipelinePage() {
       setIngestJobId(job_id);
       const { done, failed } = await pollIngestJob(job_id);
       successfulTickers = selectedArray.filter((t) => !failed.includes(t));
+      setStep1Tickers(successfulTickers);
       setOhlcvStep({ status: done === 0 ? "error" : "done", done, total: selectedArray.length, errors: failed });
       if (done === 0) return;
     } catch {
@@ -762,8 +965,29 @@ export default function PipelinePage() {
             </div>
           </div>
 
+          {/* Connection loss recovery banner */}
+          {connectionLost && lastCheckpoint && (
+            <div className="mt-4 bg-hold/5 border border-hold/30 rounded-lg px-4 py-3 flex items-center justify-between">
+              <div>
+                <p className="text-sm text-hold font-medium">⚠️ Connection lost during pipeline</p>
+                <p className="text-xs text-muted mt-1">
+                  Checkpoint saved at {new Date(lastCheckpoint.timestamp).toLocaleTimeString()} — Resume to continue from where you left off.
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={recoverFromCheckpoint}
+                className="flex-none justify-center px-4 border-hold/40 text-hold hover:bg-hold/10"
+              >
+                <ArrowRight size={14} />
+                Resume
+              </Button>
+            </div>
+          )}
+
           {/* Run button */}
-          <div className="mt-6 flex items-center gap-3">
+          <div className="mt-6 flex flex-wrap items-center gap-3">
             <Button
               onClick={runPipeline}
               disabled={selected.size === 0 || isRunning}
@@ -773,7 +997,23 @@ export default function PipelinePage() {
               <Play size={14} />
               {isRunning ? "Running Pipeline…" : `Run Pipeline (${selected.size} tickers)`}
             </Button>
-            {canResume && !isRunning && (
+
+            {/* Train Only — skip Steps 1+2, use DB data directly */}
+            {ingestedTickers.length > 0 && !isRunning && ohlcvStep.status === "idle" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={trainOnly}
+                className="flex-none justify-center px-5 border-accent/40 text-accent hover:bg-accent/10"
+                title={`Train model on ${ingestedTickers.length} tickers already in DB — skips OHLCV ingest and sentiment`}
+              >
+                <Brain size={14} />
+                Train Only ({ingestedTickers.length})
+              </Button>
+            )}
+
+            {/* Skip Step 1 — all tickers already ingested (fresh page, no active run) */}
+            {canResume && !isRunning && ohlcvStep.status === "idle" && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -785,6 +1025,41 @@ export default function PipelinePage() {
                 Resume (skip Step 1)
               </Button>
             )}
+
+            {/* Resume from Step 2 — skips tickers that already completed, dispatches only remaining */}
+            {sentimentStep.status === "error" && step1Tickers.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const remaining = step1Tickers.filter(t => !sentimentDone.has(t));
+                  setSentimentStep(INITIAL_STEP);
+                  setTrainStep(INITIAL_STEP);
+                  setTrainJobId(null);
+                  runFromStep2(remaining.length > 0 ? remaining : step1Tickers);
+                }}
+                className="flex-none justify-center px-5 border-hold/40 text-hold hover:bg-hold/10"
+                title="Continue from where sentiment stopped — already-completed tickers are skipped"
+              >
+                <ArrowRight size={14} />
+                {`Resume from Step 2${sentimentDone.size > 0 ? ` (${step1Tickers.length - sentimentDone.size} left)` : ""}`}
+              </Button>
+            )}
+
+            {/* Retry Training — Step 2 done but training errored */}
+            {!isRunning && sentimentStep.status === "done" && trainStep.status === "error" && step1Tickers.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => runFromStep3(step1Tickers)}
+                className="flex-none justify-center px-5 border-hold/40 text-hold hover:bg-hold/10"
+                title="Steps 1+2 are done — retry training only"
+              >
+                <ArrowRight size={14} />
+                Retry Training
+              </Button>
+            )}
+
             {selected.size === 0 && (
               <p className="text-xs text-muted">Select at least one ticker to begin</p>
             )}

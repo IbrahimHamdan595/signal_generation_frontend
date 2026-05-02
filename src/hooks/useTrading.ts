@@ -75,7 +75,8 @@ export function useUpdateTradingConfig() {
 export function useExecuteSignal() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (signalId: number) => tradingApi.executeSignal(signalId),
+    mutationFn: ({ signalId, volume }: { signalId: number; volume?: number }) =>
+      tradingApi.executeSignal(signalId, volume),
     onSuccess: (res) => {
       const d = res.data;
       toast.success(
@@ -114,13 +115,33 @@ export function useClosePosition() {
   });
 }
 
-export function useExecutions(limit = 50) {
-  return useQuery({
-    queryKey: ["trading", "executions", limit],
-    queryFn: async () => {
-      const res = await tradingApi.getExecutions(limit);
-      return res.data as Execution[];
+export function useRunNow() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => tradingApi.runNow(),
+    onSuccess: (res) => {
+      const d = res.data;
+      const skipped = d.skipped_tickers?.length ?? 0;
+      const msg = `Generated ${d.signals_generated} signals — ${d.orders_filled}/${d.orders_attempted} orders filled` +
+        (skipped > 0 ? ` (${skipped} tickers not on broker skipped)` : "");
+      toast.success(msg);
+      qc.invalidateQueries({ queryKey: ["trading"] });
+      qc.invalidateQueries({ queryKey: ["signals"] });
     },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail ?? "Run failed");
+    },
+  });
+}
+
+export function useExecutions(page = 0, pageSize = 20) {
+  return useQuery({
+    queryKey: ["trading", "executions", page, pageSize],
+    queryFn: async () => {
+      const res = await tradingApi.getExecutions(pageSize, page * pageSize);
+      return res.data as { items: Execution[]; total: number };
+    },
+    placeholderData: (prev) => prev,
   });
 }
 

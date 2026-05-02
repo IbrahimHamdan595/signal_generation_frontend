@@ -55,8 +55,19 @@ export default function SignalCard({ signal }: SignalCardProps) {
             <div className="bg-surface rounded-lg p-2">
               <div className="flex items-center gap-1 text-muted mb-1">
                 <Target size={10} /> Entry
+                {signal.predicted && (
+                  <span className="ml-auto rounded px-1 py-0.5 text-[9px] font-semibold bg-blue-500/15 text-blue-400 leading-none">
+                    predicted
+                  </span>
+                )}
               </div>
               <p className="font-semibold text-ink">{formatPrice(signal.entry_price)}</p>
+              {signal.predicted && (
+                <p className="text-muted mt-0.5">
+                  {signal.predicted.entry_offset_pct >= 0 ? "+" : ""}
+                  {(signal.predicted.entry_offset_pct * 100).toFixed(2)}%
+                </p>
+              )}
             </div>
             <div className="bg-surface rounded-lg p-2">
               <div className="flex items-center gap-1 text-muted mb-1">
@@ -90,7 +101,15 @@ export default function SignalCard({ signal }: SignalCardProps) {
                 {formatPercent(signal.probabilities.sell)}
               </span>
             </span>
-            {signal.bars_to_entry != null && (
+            {signal.timing ? (
+              <span className="flex items-center gap-1 ml-auto">
+                <Clock size={10} className="text-muted" />
+                <span className="text-muted">{signal.timing.bucket_label}</span>
+                <span className="rounded px-1 py-0.5 text-[9px] font-semibold bg-blue-500/15 text-blue-400 leading-none">
+                  predicted
+                </span>
+              </span>
+            ) : signal.bars_to_entry != null && (
               <span className="flex items-center gap-1 ml-auto">
                 <Clock size={10} className="text-muted" />
                 <span className="text-muted">

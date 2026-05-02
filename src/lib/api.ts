@@ -112,6 +112,7 @@ export const marketApi = {
 // ── Sentiment ─────────────────────────────────────────────────────────────────
 
 export const sentimentApi = {
+  getDailyTickers: () => api.get<string[]>("/sentiment/daily/tickers"),
   getSummary: () => api.get("/sentiment/summary"),
   getTickerSummary: (ticker: string) => api.get(`/sentiment/summary/${ticker}`),
   getSnapshot: (ticker: string) => api.get(`/sentiment/snapshot/${ticker}`),
@@ -241,10 +242,22 @@ export const tradingApi = {
   disconnect:   () => api.post("/trading/disconnect"),
   getConfig:    () => api.get("/trading/config"),
   updateConfig: (updates: Record<string, unknown>) => api.put("/trading/config", updates),
-  executeSignal:(signalId: number) => api.post(`/trading/execute/${signalId}`),
+  executeSignal:(signalId: number, volume?: number) =>
+    api.post(`/trading/execute/${signalId}`, volume != null ? { volume } : {}),
   getPositions: () => api.get("/trading/positions"),
   closePosition:(ticket: number) => api.post(`/trading/positions/${ticket}/close`),
-  getExecutions:(limit?: number) => api.get("/trading/executions", { params: { limit } }),
+  getExecutions:(limit?: number, offset?: number) =>
+    api.get("/trading/executions", { params: { limit, offset } }),
+  runNow:       () => api.post("/trading/run-now"),
+};
+
+// ── Live Edge ─────────────────────────────────────────────────────────────────
+
+export const liveEdgeApi = {
+  getSummary:     (days = 30) => api.get("/live-edge/summary", { params: { days } }),
+  getDaily:       (days = 30) => api.get("/live-edge/daily",   { params: { days } }),
+  getCalibration: ()          => api.get("/live-edge/calibration"),
+  getSlippage:    ()          => api.get("/live-edge/slippage"),
 };
 
 // ── WebSocket helpers ─────────────────────────────────────────────────────────

@@ -105,7 +105,7 @@ export function useBuildDailySentiment() {
     { tickers: string[]; years?: number }
   >({
     mutationFn: async ({ tickers, years = 5 }) => {
-      const BATCH = 20;
+      const BATCH = 5;  // smaller batches = more parallel jobs = faster overall
       const job_ids: number[] = [];
       const errors: string[] = [];
 

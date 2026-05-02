@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth";
 import Sidebar from "@/components/layout/Sidebar";
+import ContentSkeleton from "@/components/ui/DashboardSkeleton";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -24,7 +25,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="flex h-full min-h-screen" style={{ backgroundColor: "var(--bg-base)" }}>
       <Sidebar />
       <div className="flex-1 lg:ml-60 flex flex-col min-h-screen">
-        <main className="flex-1 p-6">{children}</main>
+        <main className="flex-1 p-6">
+          {!hydrated ? <ContentSkeleton /> : children}
+        </main>
       </div>
     </div>
   );

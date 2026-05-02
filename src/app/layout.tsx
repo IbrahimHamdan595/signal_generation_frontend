@@ -25,7 +25,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>{children}</Providers>
         <Script id="sw-register" strategy="afterInteractive">{`
           if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js').catch(() => {});
+            if (${process.env.NODE_ENV === "production" ? "true" : "false"}) {
+              navigator.serviceWorker.register('/sw.js').catch(() => {});
+            } else {
+              // Dev: tear down any SW from a prior prod build so cached JS chunks
+              // don't shadow live code (e.g., stale Sidebar with old nav items).
+              navigator.serviceWorker.getRegistrations().then((rs) => {
+                rs.forEach((r) => r.unregister());
+              });
+              if (window.caches) {
+                caches.keys().then((ks) => ks.forEach((k) => caches.delete(k)));
+              }
+            }
           }
         `}</Script>
       </body>

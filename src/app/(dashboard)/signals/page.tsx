@@ -8,7 +8,7 @@ import { useOutcomes } from "@/hooks/useOutcomes";
 import { useTradingStatus, useExecuteSignal } from "@/hooks/useTrading";
 import type { Action, SignalResponse, SignalOutcome } from "@/types";
 import Header from "@/components/layout/Header";
-import { Filter, RefreshCw, Zap, Download, ArrowUpRight, PlayCircle } from "lucide-react";
+import { Filter, RefreshCw, Zap, Download, ArrowUpRight, PlayCircle, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatPrice, formatPercent, formatDate } from "@/lib/utils";
 import { ActionBadge, Badge } from "@/components/ui/Badge";
@@ -21,6 +21,109 @@ function OutcomeBadge({ outcome }: { outcome: SignalOutcome["outcome"] }) {
   if (outcome === "LOSS") return <Badge variant="negative">LOSS</Badge>;
   return <Badge variant="neutral">EXPIRED</Badge>;
 }
+
+// ── Lot-size dialog ────────────────────────────────────────────────────────────
+
+function ExecuteDialog({
+  signal,
+  onConfirm,
+  onCancel,
+  loading,
+}: {
+  signal: SignalResponse;
+  onConfirm: (volume: number | undefined) => void;
+  onCancel: () => void;
+  loading: boolean;
+}) {
+  const [lotInput, setLotInput] = useState("");
+
+  const volume = lotInput.trim() === "" ? undefined : parseFloat(lotInput);
+  const invalid = lotInput.trim() !== "" && (isNaN(volume!) || volume! <= 0);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="bg-bg border border-border rounded-xl shadow-2xl p-6 w-80 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-ink text-sm">Execute Signal</h3>
+          <button onClick={onCancel} className="text-muted hover:text-ink transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="bg-surface rounded-lg p-3 text-sm space-y-1">
+          <div className="flex justify-between">
+            <span className="text-muted">Ticker</span>
+            <span className="font-mono font-bold text-ink">{signal.ticker}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted">Action</span>
+            <span className={`font-semibold ${signal.action === "BUY" ? "text-buy" : "text-sell"}`}>
+              {signal.action}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted">Confidence</span>
+            <span className="text-ink">{formatPercent(signal.confidence)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted">Entry / SL</span>
+            <span className="text-ink text-xs">
+              {formatPrice(signal.entry_price)} / {formatPrice(signal.stop_loss)}
+            </span>
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-xs text-muted">
+            Lot size <span className="text-muted/60">(leave blank for auto-sizing)</span>
+          </label>
+          <input
+            type="number"
+            value={lotInput}
+            onChange={(e) => setLotInput(e.target.value)}
+            placeholder="e.g. 0.1"
+            min="0.01"
+            step="0.01"
+            autoFocus
+            className={`w-full bg-surface border rounded-lg px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none transition-colors ${
+              invalid ? "border-sell/60 focus:border-sell" : "border-border focus:border-accent/60"
+            }`}
+          />
+          {invalid && (
+            <p className="text-xs text-sell">Enter a positive number or leave blank</p>
+          )}
+          {!lotInput && (
+            <p className="text-xs text-muted">
+              Auto: fixed-fraction risk sizing based on your config
+            </p>
+          )}
+        </div>
+
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            className="flex-1 justify-center"
+            onClick={onCancel}
+          >
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            className="flex-1 justify-center"
+            disabled={invalid || loading}
+            loading={loading}
+            onClick={() => onConfirm(volume)}
+          >
+            <PlayCircle size={13} /> Place Order
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Signals table ─────────────────────────────────────────────────────────────
 
 function SignalsWithOutcomesTable({
   signals,
@@ -168,9 +271,9 @@ export default function SignalsPage() {
   const [actionFilter, setActionFilter] = useState<Action | "ALL">("ALL");
   const [minConf, setMinConf] = useState(0);
   const [search, setSearch] = useState("");
+  const [pendingSignalId, setPendingSignalId] = useState<number | null>(null);
   const qc = useQueryClient();
 
-  // Build outcome lookup by signal_id
   const outcomeMap: Record<string, SignalOutcome> = {};
   for (const o of outcomes) {
     outcomeMap[String(o.signal_id)] = o;
@@ -185,15 +288,37 @@ export default function SignalsPage() {
   const sellCount = allSignals?.filter((s) => s.action === "SELL").length ?? 0;
   const holdCount = allSignals?.filter((s) => s.action === "HOLD").length ?? 0;
 
+  const pendingSignal = pendingSignalId != null
+    ? (allSignals ?? []).find((s) => Number(s.id) === pendingSignalId) ?? null
+    : null;
+
   function handleGenerateAll() {
     const tickers = (allSignals ?? []).map((s) => s.ticker);
     const unique = [...new Set(tickers)];
     if (unique.length > 0) generateBatch({ tickers: unique });
   }
 
+  function handleConfirmExecute(volume: number | undefined) {
+    if (pendingSignalId == null) return;
+    executeSignal(
+      { signalId: pendingSignalId, volume },
+      { onSettled: () => setPendingSignalId(null) }
+    );
+  }
+
   return (
     <div>
       <Header title="Signals" />
+
+      {pendingSignal && (
+        <ExecuteDialog
+          signal={pendingSignal}
+          onConfirm={handleConfirmExecute}
+          onCancel={() => setPendingSignalId(null)}
+          loading={executing}
+        />
+      )}
+
       <div className="mt-6 space-y-5">
         {/* Summary chips + actions */}
         <div className="flex items-center gap-3 flex-wrap">
@@ -297,7 +422,7 @@ export default function SignalsPage() {
               signals={filtered}
               outcomeMap={outcomeMap}
               mt5Connected={mt5Connected}
-              onExecute={(id) => executeSignal(id)}
+              onExecute={(id) => setPendingSignalId(id)}
               executing={executing}
             />
           ) : (
