@@ -4,7 +4,10 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export const api = axios.create({
   baseURL: `${BASE_URL}/api/v1`,
-  headers: { "Content-Type": "application/json" },
+  headers: {
+    "Content-Type": "application/json",
+    "ngrok-skip-browser-warning": "true",
+  },
 });
 
 // Attach access token from localStorage on every request
@@ -35,7 +38,9 @@ api.interceptors.response.use(
         // Deduplicate concurrent refresh calls
         if (!_refreshing) {
           _refreshing = axios
-            .post(`${BASE_URL}/api/v1/auth/refresh`, { refresh_token: refreshToken })
+            .post(`${BASE_URL}/api/v1/auth/refresh`, { refresh_token: refreshToken }, {
+              headers: { "ngrok-skip-browser-warning": "true" },
+            })
             .then((r) => {
               localStorage.setItem("access_token", r.data.access_token);
               localStorage.setItem("refresh_token", r.data.refresh_token);
