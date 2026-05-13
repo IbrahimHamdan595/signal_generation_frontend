@@ -13,7 +13,7 @@ import { formatNumber } from "@/lib/utils";
 import { Activity, Target, Zap, BarChart2 } from "lucide-react";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
+// Stat component with optional color coding and subtext
 function Stat({
   label,
   value,
