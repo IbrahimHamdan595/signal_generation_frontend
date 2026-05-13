@@ -122,9 +122,21 @@ export function useRunNow() {
     onSuccess: (res) => {
       const d = res.data;
       const skipped = d.skipped_tickers?.length ?? 0;
-      const msg = `Generated ${d.signals_generated} signals — ${d.orders_filled}/${d.orders_attempted} orders filled` +
-        (skipped > 0 ? ` (${skipped} tickers not on broker skipped)` : "");
-      toast.success(msg);
+      const actionable = d.signals_actionable ?? 0;
+      const filtered = d.signals_filtered ?? 0;
+      const ev = d.total_expected_value ?? 0;
+
+      const parts: string[] = [
+        `${d.signals_generated} signals (${actionable} actionable, ${filtered} filtered)`,
+        `${d.orders_filled}/${d.orders_attempted} orders filled`,
+      ];
+      if (ev !== 0) {
+        parts.push(`Σ EV: ${(ev * 100).toFixed(2)}%`);
+      }
+      if (skipped > 0) {
+        parts.push(`${skipped} skipped`);
+      }
+      toast.success(parts.join(" • "));
       qc.invalidateQueries({ queryKey: ["trading"] });
       qc.invalidateQueries({ queryKey: ["signals"] });
     },

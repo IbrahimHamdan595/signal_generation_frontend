@@ -35,6 +35,20 @@ export interface SignalResponse {
     bars: number;
     probs: number[];
   } | null;
+
+  // ── Profitability fields (migration 0012) ────────────────────────────────
+  uncertainty: number | null;
+  predicted_rr: number | null;
+  expected_value: number | null;
+  kelly_full: number | null;
+  kelly_fraction: number | null;
+  reject_reasons: string[] | null;
+  atr_stop_loss: number | null;
+  atr_take_profit: number | null;
+  fomc_days: number | null;
+  cpi_days: number | null;
+  nfp_days: number | null;
+  earnings_days: number | null;
 }
 
 export interface OHLCVResponse {

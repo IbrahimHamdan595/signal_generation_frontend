@@ -65,17 +65,48 @@ function ExecuteDialog({
             <span className="text-muted">Confidence</span>
             <span className="text-ink">{formatPercent(signal.confidence)}</span>
           </div>
+          {signal.expected_value != null && (
+            <div className="flex justify-between">
+              <span className="text-muted">Expected Value</span>
+              <span className={signal.expected_value > 0 ? "text-buy" : "text-sell"}>
+                {signal.expected_value > 0 ? "+" : ""}
+                {(signal.expected_value * 100).toFixed(2)}%
+              </span>
+            </div>
+          )}
+          {signal.predicted_rr != null && (
+            <div className="flex justify-between">
+              <span className="text-muted">Predicted R:R</span>
+              <span className="text-ink">{signal.predicted_rr.toFixed(2)}</span>
+            </div>
+          )}
+          {signal.kelly_fraction != null && signal.kelly_fraction > 0 && (
+            <div className="flex justify-between">
+              <span className="text-muted">Kelly Size</span>
+              <span className="text-accent font-medium">
+                {(signal.kelly_fraction * 100).toFixed(1)}% of risk budget
+              </span>
+            </div>
+          )}
+          {signal.uncertainty != null && (
+            <div className="flex justify-between">
+              <span className="text-muted">Uncertainty</span>
+              <span className={signal.uncertainty > 0.15 ? "text-sell" : "text-ink"}>
+                {signal.uncertainty.toFixed(3)}
+              </span>
+            </div>
+          )}
           <div className="flex justify-between">
-            <span className="text-muted">Entry / SL</span>
+            <span className="text-muted">Entry / SL / TP</span>
             <span className="text-ink text-xs">
-              {formatPrice(signal.entry_price)} / {formatPrice(signal.stop_loss)}
+              {formatPrice(signal.entry_price)} / {formatPrice(signal.stop_loss)} / {formatPrice(signal.take_profit)}
             </span>
           </div>
         </div>
 
         <div className="space-y-1.5">
           <label className="text-xs text-muted">
-            Lot size <span className="text-muted/60">(leave blank for auto-sizing)</span>
+            Lot size <span className="text-muted/60">(leave blank for Kelly auto-sizing)</span>
           </label>
           <input
             type="number"
@@ -94,7 +125,7 @@ function ExecuteDialog({
           )}
           {!lotInput && (
             <p className="text-xs text-muted">
-              Auto: fixed-fraction risk sizing based on your config
+              Auto: Kelly-scaled fixed-fraction sizing from your config
             </p>
           )}
         </div>
@@ -146,10 +177,12 @@ function SignalsWithOutcomesTable({
             <th className="text-left pb-3 font-medium">Ticker</th>
             <th className="text-left pb-3 font-medium">Action</th>
             <th className="text-right pb-3 font-medium">Confidence</th>
+            <th className="text-right pb-3 font-medium" title="Expected value = conf·TP − (1−conf)·SL">EV</th>
+            <th className="text-right pb-3 font-medium" title="Predicted reward / risk ratio">R:R</th>
+            <th className="text-right pb-3 font-medium" title="Quarter-Kelly position size (% of risk budget)">Kelly</th>
             <th className="text-right pb-3 font-medium">Entry</th>
             <th className="text-right pb-3 font-medium">Stop Loss</th>
             <th className="text-right pb-3 font-medium">Take Profit</th>
-            <th className="text-right pb-3 font-medium">Net P&L</th>
             <th className="text-left pb-3 font-medium">Outcome</th>
             <th className="text-right pb-3 font-medium">When</th>
             <th className="pb-3" />
@@ -171,19 +204,31 @@ function SignalsWithOutcomesTable({
                 <td className="py-3 text-right">
                   <span className="text-ink font-medium">{formatPercent(s.confidence)}</span>
                 </td>
-                <td className="py-3 text-right text-ink">{formatPrice(s.entry_price)}</td>
-                <td className="py-3 text-right text-sell">{formatPrice(s.stop_loss)}</td>
-                <td className="py-3 text-right text-buy">{formatPrice(s.take_profit)}</td>
                 <td className="py-3 text-right">
-                  {s.net_profit != null ? (
-                    <span className={s.net_profit >= 0 ? "text-buy" : "text-sell"}>
-                      {s.net_profit >= 0 ? "+" : ""}
-                      {formatPrice(s.net_profit)}
+                  {s.expected_value != null ? (
+                    <span className={s.expected_value > 0 ? "text-buy" : "text-sell"}>
+                      {s.expected_value > 0 ? "+" : ""}
+                      {(s.expected_value * 100).toFixed(2)}%
                     </span>
                   ) : (
                     <span className="text-muted">—</span>
                   )}
                 </td>
+                <td className="py-3 text-right text-ink">
+                  {s.predicted_rr != null ? s.predicted_rr.toFixed(2) : <span className="text-muted">—</span>}
+                </td>
+                <td className="py-3 text-right">
+                  {s.kelly_fraction != null && s.kelly_fraction > 0 ? (
+                    <span className="text-accent font-medium">
+                      {(s.kelly_fraction * 100).toFixed(1)}%
+                    </span>
+                  ) : (
+                    <span className="text-muted">—</span>
+                  )}
+                </td>
+                <td className="py-3 text-right text-ink">{formatPrice(s.entry_price)}</td>
+                <td className="py-3 text-right text-sell">{formatPrice(s.stop_loss)}</td>
+                <td className="py-3 text-right text-buy">{formatPrice(s.take_profit)}</td>
                 <td className="py-3">
                   {outcome ? (
                     <div className="flex flex-col gap-0.5">

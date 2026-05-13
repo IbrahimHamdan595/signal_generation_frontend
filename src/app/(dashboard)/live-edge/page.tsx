@@ -10,7 +10,7 @@ import {
   useLiveEdgeSlippage,
 } from "@/hooks/useLiveEdge";
 import { formatNumber } from "@/lib/utils";
-import { TrendingUp, TrendingDown, Activity, Target, Zap, BarChart2 } from "lucide-react";
+import { Activity, Target, Zap, BarChart2 } from "lucide-react";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -87,7 +87,9 @@ export default function LiveEdgePage() {
   const { data: calibration = [] } = useLiveEdgeCalibration();
   const { data: slippage } = useLiveEdgeSlippage();
 
-  const noData = summary?.no_data || summary?.total_trades === 0;
+  // Treat undefined summary (auth error, network failure, etc.) as no-data
+  // so the page doesn't crash dereferencing summary! later.
+  const noData = !summary || summary.no_data || summary.total_trades === 0;
 
   return (
     <div>
