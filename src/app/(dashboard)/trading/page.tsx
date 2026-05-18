@@ -16,6 +16,7 @@ import {
   useRunNow,
 } from "@/hooks/useTrading";
 import { formatNumber } from "@/lib/utils";
+import { ActiveStrategiesCard } from "@/components/trading/ActiveStrategiesCard";
 import {
   Wifi, WifiOff, Shield, TrendingUp, TrendingDown,
   X, Settings, Activity, Zap,
@@ -308,6 +309,9 @@ export default function TradingPage() {
             )}
           </div>
         </Card>
+
+        {/* Active strategies — read-only summary, full controls on /strategies */}
+        <ActiveStrategiesCard />
 
         {/* Connect form — shown when not connected */}
         {!loadingStatus && !connected && (

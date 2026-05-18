@@ -12,6 +12,7 @@ import { Filter, RefreshCw, Zap, Download, ArrowUpRight, PlayCircle, X } from "l
 import { useQueryClient } from "@tanstack/react-query";
 import { formatPrice, formatPercent, formatDate } from "@/lib/utils";
 import { ActionBadge, Badge } from "@/components/ui/Badge";
+import { SourceBadge, SOURCE_OPTIONS, type SourceOption } from "@/components/signals/SourceBadge";
 import Link from "next/link";
 
 const ACTION_FILTERS: (Action | "ALL")[] = ["ALL", "BUY", "SELL", "HOLD"];
@@ -175,6 +176,7 @@ function SignalsWithOutcomesTable({
         <thead>
           <tr className="border-b border-border text-xs text-muted">
             <th className="text-left pb-3 font-medium">Ticker</th>
+            <th className="text-left pb-3 font-medium">Source</th>
             <th className="text-left pb-3 font-medium">Action</th>
             <th className="text-right pb-3 font-medium">Confidence</th>
             <th className="text-right pb-3 font-medium" title="Expected value = conf·TP − (1−conf)·SL">EV</th>
@@ -198,6 +200,9 @@ function SignalsWithOutcomesTable({
                 className="border-b border-border/50 hover:bg-surface/50 transition-colors"
               >
                 <td className="py-3 font-bold text-ink">{s.ticker}</td>
+                <td className="py-3">
+                  <SourceBadge source={s.source} size="xs" />
+                </td>
                 <td className="py-3">
                   <ActionBadge action={s.action} />
                 </td>
@@ -314,6 +319,8 @@ export default function SignalsPage() {
   const { mutate: executeSignal, isPending: executing } = useExecuteSignal();
   const mt5Connected = tradingStatus?.connected ?? false;
   const [actionFilter, setActionFilter] = useState<Action | "ALL">("ALL");
+  // Empty Set means "all sources" — chip toggles add/remove individual sources.
+  const [sourceFilter, setSourceFilter] = useState<Set<SourceOption>>(new Set());
   const [minConf, setMinConf] = useState(0);
   const [search, setSearch] = useState("");
   const [pendingSignalId, setPendingSignalId] = useState<number | null>(null);
@@ -326,8 +333,25 @@ export default function SignalsPage() {
 
   let filtered: SignalResponse[] = allSignals ?? [];
   if (actionFilter !== "ALL") filtered = filtered.filter((s) => s.action === actionFilter);
+  if (sourceFilter.size > 0) filtered = filtered.filter((s) => sourceFilter.has(s.source as SourceOption));
   if (minConf > 0) filtered = filtered.filter((s) => s.confidence >= minConf);
   if (search) filtered = filtered.filter((s) => s.ticker.includes(search.toUpperCase()));
+
+  // Per-source counts for the chip labels — computed on the full list (pre-source-filter)
+  // so the count reflects "available", not "selected".
+  const sourceCounts: Record<string, number> = {};
+  for (const s of allSignals ?? []) {
+    sourceCounts[s.source] = (sourceCounts[s.source] ?? 0) + 1;
+  }
+
+  function toggleSource(value: SourceOption) {
+    setSourceFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return next;
+    });
+  }
 
   const buyCount = allSignals?.filter((s) => s.action === "BUY").length ?? 0;
   const sellCount = allSignals?.filter((s) => s.action === "SELL").length ?? 0;
@@ -426,6 +450,39 @@ export default function SignalsPage() {
                   {a}
                 </button>
               ))}
+            </div>
+
+            {/* Source filter chips — empty selection means "all" */}
+            <div className="flex items-center gap-1.5 text-xs text-muted ml-2">Source</div>
+            <div className="flex gap-1">
+              {SOURCE_OPTIONS.map(({ value, label }) => {
+                const selected = sourceFilter.has(value);
+                return (
+                  <button
+                    key={value}
+                    onClick={() => toggleSource(value)}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                      selected
+                        ? "bg-accent/20 text-accent border border-accent/30"
+                        : "text-muted hover:text-ink hover:bg-surface border border-transparent"
+                    }`}
+                  >
+                    {label}
+                    <span className="ml-1 text-[10px] opacity-60">
+                      {sourceCounts[value] ?? 0}
+                    </span>
+                  </button>
+                );
+              })}
+              {sourceFilter.size > 0 && (
+                <button
+                  onClick={() => setSourceFilter(new Set())}
+                  className="px-2 py-1 rounded-lg text-xs text-muted hover:text-sell transition-colors"
+                  title="Clear source filter"
+                >
+                  <X size={11} />
+                </button>
+              )}
             </div>
 
             <div className="flex items-center gap-2 ml-4">

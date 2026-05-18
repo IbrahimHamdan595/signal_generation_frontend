@@ -265,6 +265,87 @@ export const liveEdgeApi = {
   getSlippage:    ()          => api.get("/live-edge/slippage"),
 };
 
+// ── Three-pipeline orchestration (Phase 8b) ────────────────────────────────
+export type PipelineSource = "ml_equities" | "ml_fx" | "rule_donchian";
+
+export interface Pipeline {
+  source:             PipelineSource;
+  display_name:       string;
+  description:        string;
+  kind:               "ml" | "rule";
+  enabled:            boolean;
+  last_run_at:        string | null;
+  last_signals_count: number | null;
+  last_error:         string | null;
+  config:             Record<string, unknown>;
+  updated_at:         string | null;
+}
+
+export const pipelinesApi = {
+  list:       ()                                                                    => api.get<{ pipelines: Pipeline[] }>("/pipelines"),
+  update:     (source: PipelineSource, body: Partial<Pick<Pipeline, "enabled" | "config">>) => api.patch<Pipeline>(`/pipelines/${source}`, body),
+  runOne:     (source: PipelineSource) => api.post<{ status: string; source: string }>(`/pipelines/${source}/run`),
+  runAll:     ()                       => api.post<{ status: string; sources?: string[] }>("/pipelines/run-all"),
+};
+
+// ── Strategy comparison report (Phase 8) ────────────────────────────────────
+export interface EquityCurvePoint { timestamp: string | null; cum_pnl_raw: number; cum_pnl_adj: number; }
+export interface StrategyAggregate {
+  source:             PipelineSource | string;
+  display_name:       string;
+  total_trades:       number;
+  wins:               number;
+  losses:             number;
+  win_rate:           number;
+  total_pnl_usd:      number;
+  total_pnl_usd_adj:  number;
+  avg_pnl_per_trade:  number;
+  sharpe_per_trade:   number;
+  max_drawdown_usd:   number;
+  max_drawdown_pct:   number;
+  equity_curve:       EquityCurvePoint[];
+}
+export interface StrategyComparison {
+  since:      string;
+  until:      string;
+  cost_model: Record<string, number>;
+  sources:    StrategyAggregate[];
+}
+
+export interface StrategyTrade {
+  id:             number;
+  signal_id:      number;
+  ticker:         string;
+  symbol:         string | null;
+  mt5_ticket:     number | null;
+  action:         "BUY" | "SELL" | "HOLD";
+  order_type:     string | null;
+  volume:         number;
+  fill_price:     number;
+  stop_loss:      number;
+  take_profit:    number;
+  confidence:     number | null;
+  predicted_rr:   number | null;
+  expected_value: number | null;
+  pnl_raw_usd:    number;
+  pnl_adj_usd:    number;
+  cost_usd:       number;
+  outcome:        "win" | "loss" | "flat";
+  status:         string | null;
+  closed_at:      string | null;
+  created_at:     string | null;
+}
+
+export const reportsApi = {
+  comparison: (since?: string) =>
+    api.get<StrategyComparison>("/reports/strategy-comparison", { params: since ? { since } : {} }),
+  trades:     (source: PipelineSource, since?: string, limit = 200) =>
+    api.get<{ source: string; display_name: string; since: string; count: number; trades: StrategyTrade[] }>(
+      `/reports/strategy-trades/${source}`,
+      { params: { since, limit } },
+    ),
+};
+
 // ── WebSocket helpers ─────────────────────────────────────────────────────────
 
 export const WS_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000")

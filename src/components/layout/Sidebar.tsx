@@ -17,21 +17,25 @@ import {
   Workflow,
   CandlestickChart,
   Activity,
+  GitCompare,
+  Layers,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 
 const nav = [
-  { href: "/",           label: "Dashboard", icon: LayoutDashboard },
-  { href: "/signals",    label: "Signals",   icon: TrendingUp },
-  { href: "/market",     label: "Market",    icon: BarChart2 },
-  { href: "/model",      label: "Model",     icon: Brain },
-  { href: "/watchlist",  label: "Watchlist", icon: Star },
-  { href: "/trading",    label: "Trading",   icon: CandlestickChart },
-  { href: "/live-edge",  label: "Live Edge", icon: Activity },
-  { href: "/pipeline",   label: "Pipeline",  icon: Workflow },
-  { href: "/settings",   label: "Settings",  icon: Settings },
+  { href: "/",           label: "Dashboard",  icon: LayoutDashboard },
+  { href: "/signals",    label: "Signals",    icon: TrendingUp },
+  { href: "/strategies", label: "Strategies", icon: Layers },
+  { href: "/comparison", label: "Comparison", icon: GitCompare },
+  { href: "/market",     label: "Market",     icon: BarChart2 },
+  { href: "/model",      label: "Model",      icon: Brain },
+  { href: "/watchlist",  label: "Watchlist",  icon: Star },
+  { href: "/trading",    label: "Trading",    icon: CandlestickChart },
+  { href: "/live-edge",  label: "Live Edge",  icon: Activity },
+  { href: "/pipeline",   label: "Pipeline",   icon: Workflow },
+  { href: "/settings",   label: "Settings",   icon: Settings },
 ];
 
 interface SidebarContentProps {
