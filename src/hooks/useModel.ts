@@ -1,62 +1,68 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { mlApi } from "@/lib/api";
+import { mlApi, type AssetClass } from "@/lib/api";
 import type { ModelStatus, EvalReport, ModelVersion, WalkForwardResult } from "@/types";
 import toast from "react-hot-toast";
 
-export function useModelStatus() {
+// Each hook accepts an asset class so the Model page can render two columns
+// (Equities ML / FX ML) side by side. The query key includes the asset class
+// so TanStack Query caches the two views separately and switching tabs is
+// instant on the second visit.
+
+export function useModelStatus(assetClass: AssetClass = "equities") {
   return useQuery<ModelStatus>({
-    queryKey: ["model", "status"],
+    queryKey: ["model", "status", assetClass],
     queryFn: async () => {
-      const res = await mlApi.getStatus();
+      const res = await mlApi.getStatus(assetClass);
       return res.data;
     },
     refetchInterval: 30_000,
   });
 }
 
-export function useEvalReport() {
+export function useEvalReport(assetClass: AssetClass = "equities") {
   return useQuery<EvalReport>({
-    queryKey: ["model", "report"],
+    queryKey: ["model", "report", assetClass],
     queryFn: async () => {
-      const res = await mlApi.getReport();
+      const res = await mlApi.getReport(assetClass);
       return res.data;
     },
+    retry: false,
   });
 }
 
-export function useTrainModel() {
+export function useTrainModel(assetClass: AssetClass = "equities") {
   const qc = useQueryClient();
   return useMutation<{ job_id: number }, Error, { tickers: string[]; epochs?: number }>({
     mutationFn: async ({ tickers, epochs }) => {
-      const res = await mlApi.train(tickers, epochs);
+      const res = await mlApi.train(tickers, epochs ?? 50, assetClass);
       return res.data;
     },
     onSuccess: () => {
-      toast.success("Training started in background");
+      toast.success(`Training started (${assetClass === "fx" ? "FX" : "Equities"})`);
       setTimeout(() => qc.invalidateQueries({ queryKey: ["model"] }), 3000);
     },
     onError: () => toast.error("Failed to start training"),
   });
 }
 
-export function useModelVersions() {
+export function useModelVersions(assetClass: AssetClass = "equities") {
   return useQuery<ModelVersion[]>({
-    queryKey: ["model", "versions"],
+    queryKey: ["model", "versions", assetClass],
     queryFn: async () => {
-      const res = await mlApi.listVersions();
+      const res = await mlApi.listVersions(assetClass);
       return res.data.versions;
     },
   });
 }
 
-export function useRollbackModel() {
+export function useRollbackModel(assetClass: AssetClass = "equities") {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (version: string) => mlApi.rollback(version),
+    mutationFn: (version: string) => mlApi.rollback(version, assetClass),
     onSuccess: (_, version) => {
-      toast.success(`Rolled back to ${version}`);
+      toast.success(`Rolled back ${assetClass === "fx" ? "FX" : "Equities"} to ${version}`);
       qc.invalidateQueries({ queryKey: ["model"] });
     },
     onError: () => toast.error("Rollback failed"),
@@ -74,11 +80,11 @@ export function useWalkForwardResult() {
   });
 }
 
-export function useLastTrainResult() {
+export function useLastTrainResult(assetClass: AssetClass = "equities") {
   return useQuery<Record<string, unknown>>({
-    queryKey: ["model", "last-result"],
+    queryKey: ["model", "last-result", assetClass],
     queryFn: async () => {
-      const res = await mlApi.getLastResult();
+      const res = await mlApi.getLastResult(assetClass);
       return res.data;
     },
     retry: false,

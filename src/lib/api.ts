@@ -130,22 +130,30 @@ export const sentimentApi = {
 
 // ── ML ────────────────────────────────────────────────────────────────────────
 
+// asset_class routes to the equities/fx checkpoint folders so each model's
+// status, report, versions and rollback can be viewed independently.
+export type AssetClass = "equities" | "fx";
+
 export const mlApi = {
-  getStatus: () => api.get("/ml/status"),
-  getReport: () => api.get("/ml/report"),
-  getLastResult: () => api.get("/ml/train/result"),
-  train: (tickers: string[], epochs = 50) =>
-    api.post("/ml/train", { tickers, epochs }),
-  trainSync: (tickers: string[], epochs = 20) =>
-    api.post("/ml/train/sync", { tickers, epochs }),
+  getStatus: (asset_class: AssetClass = "equities") =>
+    api.get("/ml/status", { params: { asset_class } }),
+  getReport: (asset_class: AssetClass = "equities") =>
+    api.get("/ml/report", { params: { asset_class } }),
+  getLastResult: (asset_class: AssetClass = "equities") =>
+    api.get("/ml/train/result", { params: { asset_class } }),
+  train: (tickers: string[], epochs = 50, asset_class: AssetClass = "equities") =>
+    api.post("/ml/train", { tickers, epochs, asset_class }),
+  trainSync: (tickers: string[], epochs = 20, asset_class: AssetClass = "equities") =>
+    api.post("/ml/train/sync", { tickers, epochs, asset_class }),
   predict: (ticker: string, interval = "1d") =>
     api.post("/ml/predict", { ticker, interval }),
   runWalkForward: (tickers: string[], n_splits = 5, epochs = 30) =>
     api.post("/ml/walkforward", { tickers, n_splits, epochs }),
   getWalkForwardResult: () => api.get("/ml/walkforward/result"),
-  listVersions: () => api.get("/ml/versions"),
-  rollback: (version: string) =>
-    api.post("/ml/versions/rollback", null, { params: { version } }),
+  listVersions: (asset_class: AssetClass = "equities") =>
+    api.get("/ml/versions", { params: { asset_class } }),
+  rollback: (version: string, asset_class: AssetClass = "equities") =>
+    api.post("/ml/versions/rollback", null, { params: { version, asset_class } }),
 };
 
 // ── Ingest ────────────────────────────────────────────────────────────────────

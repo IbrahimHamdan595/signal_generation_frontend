@@ -125,9 +125,25 @@ export function useRunNow() {
       const actionable = d.signals_actionable ?? 0;
       const filtered = d.signals_filtered ?? 0;
       const ev = d.total_expected_value ?? 0;
+      const bySource: Record<string, number> = d.signals_by_source ?? {};
+
+      // Break the generated count down by pipeline so the user can see the
+      // three-pipeline split, e.g. "20 signals (12 Equities ML, 6 FX ML, 2 Donchian)"
+      const sourceLabel: Record<string, string> = {
+        ml_equities:   "Equities ML",
+        ml_fx:         "FX ML",
+        rule_donchian: "Donchian",
+      };
+      const sourceParts = Object.entries(bySource)
+        .filter(([, n]) => n > 0)
+        .map(([src, n]) => `${n} ${sourceLabel[src] ?? src}`)
+        .join(", ");
 
       const parts: string[] = [
-        `${d.signals_generated} signals (${actionable} actionable, ${filtered} filtered)`,
+        sourceParts
+          ? `${d.signals_generated} signals (${sourceParts})`
+          : `${d.signals_generated} signals`,
+        `${actionable} actionable, ${filtered} filtered`,
         `${d.orders_filled}/${d.orders_attempted} orders filled`,
       ];
       if (ev !== 0) {
@@ -139,6 +155,7 @@ export function useRunNow() {
       toast.success(parts.join(" • "));
       qc.invalidateQueries({ queryKey: ["trading"] });
       qc.invalidateQueries({ queryKey: ["signals"] });
+      qc.invalidateQueries({ queryKey: ["pipelines"] });
     },
     onError: (err: any) => {
       toast.error(err?.response?.data?.detail ?? "Run failed");

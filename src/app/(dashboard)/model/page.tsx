@@ -15,10 +15,16 @@ import {
   useLastTrainResult,
 } from "@/hooks/useModel";
 import { useJobStatus } from "@/hooks/useJobStatus";
-import { formatPercent, formatNumber, formatRelative } from "@/lib/utils";
+import type { AssetClass } from "@/lib/api";
+import { cn, formatPercent, formatNumber, formatRelative } from "@/lib/utils";
 import { Brain, Zap, TrendingUp, Target, Activity, RotateCcw, GitBranch, BarChart2, ClipboardList, Loader2 } from "lucide-react";
 import Link from "next/link";
 import Header from "@/components/layout/Header";
+
+const ASSET_TABS: { key: AssetClass; label: string; sub: string }[] = [
+  { key: "equities", label: "Equities ML", sub: "S&P 500 transformer model" },
+  { key: "fx",       label: "FX ML",       sub: "FX/metals — vol-normalised labels" },
+];
 
 const REGRESSION_LABELS: Record<string, string> = {
   entry_price: "Entry Price",
@@ -28,13 +34,18 @@ const REGRESSION_LABELS: Record<string, string> = {
 };
 
 export default function ModelPage() {
-  const { data: status, isLoading: loadingStatus } = useModelStatus();
-  const { data: report, isLoading: loadingReport } = useEvalReport();
-  const { data: versions, isLoading: loadingVersions } = useModelVersions();
+  // Tab state — every per-class hook below is keyed by `assetClass` so the
+  // panels refetch when the user clicks between Equities ML / FX ML. Walk-
+  // forward is shared across both (it's an experimental tool, not a model).
+  const [assetClass, setAssetClass] = useState<AssetClass>("equities");
+
+  const { data: status, isLoading: loadingStatus } = useModelStatus(assetClass);
+  const { data: report, isLoading: loadingReport } = useEvalReport(assetClass);
+  const { data: versions, isLoading: loadingVersions } = useModelVersions(assetClass);
   const { data: wfResult } = useWalkForwardResult();
-  const { data: lastResult } = useLastTrainResult();
-  const { mutate: train, isPending: training } = useTrainModel();
-  const { mutate: rollback, isPending: rollingBack } = useRollbackModel();
+  const { data: lastResult } = useLastTrainResult(assetClass);
+  const { mutate: train, isPending: training } = useTrainModel(assetClass);
+  const { mutate: rollback, isPending: rollingBack } = useRollbackModel(assetClass);
   const { mutate: runWF, isPending: runningWF } = useRunWalkForward();
 
   const [tickerInput, setTickerInput] = useState("");
@@ -59,6 +70,32 @@ export default function ModelPage() {
     <div>
       <Header title="Model" />
       <div className="mt-6 space-y-5">
+
+        {/* Asset-class tabs — switches every panel below at once. Walk-forward
+            is shared, everything else (status, report, versions, last training
+            run, train trigger) is per asset class. */}
+        <div className="flex items-center gap-2 border-b border-border">
+          {ASSET_TABS.map((tab) => {
+            const active = assetClass === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setAssetClass(tab.key)}
+                className={cn(
+                  "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
+                  active
+                    ? "border-accent text-ink"
+                    : "border-transparent text-muted hover:text-ink"
+                )}
+              >
+                <span>{tab.label}</span>
+                <span className="ml-2 text-xs text-muted font-normal hidden sm:inline">
+                  {tab.sub}
+                </span>
+              </button>
+            );
+          })}
+        </div>
 
         {/* Status cards */}
         {loadingStatus ? (
@@ -230,18 +267,26 @@ export default function ModelPage() {
           {/* Train trigger */}
           <Card glow="accent">
             <CardHeader>
-              <CardTitle>Trigger Training</CardTitle>
+              <CardTitle>
+                Trigger Training — {assetClass === "fx" ? "FX" : "Equities"}
+              </CardTitle>
               <Zap size={14} className="text-accent" />
             </CardHeader>
             <p className="text-xs text-muted mb-3">
-              Provide comma-separated tickers (min 2). Training runs in background.
+              {assetClass === "fx"
+                ? "Comma-separated FX/metal pairs (min 2). Saves to checkpoints/fx/."
+                : "Comma-separated equity tickers (min 2). Saves to checkpoints/equities/."}
             </p>
             <div className="space-y-3">
               <input
                 type="text"
                 value={tickerInput}
                 onChange={(e) => setTickerInput(e.target.value)}
-                placeholder="AAPL, MSFT, GOOGL, AMZN…"
+                placeholder={
+                  assetClass === "fx"
+                    ? "EURUSD, GBPUSD, USDJPY, XAUUSD…"
+                    : "AAPL, MSFT, GOOGL, AMZN…"
+                }
                 className="w-full bg-surface border border-border rounded-lg px-3 py-2.5 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-accent/60 transition-colors"
               />
               <Button
