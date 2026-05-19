@@ -289,11 +289,21 @@ export interface Pipeline {
   updated_at:         string | null;
 }
 
+export interface PipelineResetResult {
+  status:                 "reset";
+  pending_orders_cleared: number;
+  pipeline_cards_reset:   boolean;
+  equity_snapshot_rebased: boolean;
+  auto_trade_reenabled:   number;
+  note:                   string;
+}
+
 export const pipelinesApi = {
   list:       ()                                                                    => api.get<{ pipelines: Pipeline[] }>("/pipelines"),
   update:     (source: PipelineSource, body: Partial<Pick<Pipeline, "enabled" | "config">>) => api.patch<Pipeline>(`/pipelines/${source}`, body),
   runOne:     (source: PipelineSource) => api.post<{ status: string; source: string }>(`/pipelines/${source}/run`),
   runAll:     ()                       => api.post<{ status: string; sources?: string[] }>("/pipelines/run-all"),
+  reset:      ()                       => api.post<PipelineResetResult>("/pipelines/reset"),
 };
 
 // ── Strategy comparison report (Phase 8) ────────────────────────────────────

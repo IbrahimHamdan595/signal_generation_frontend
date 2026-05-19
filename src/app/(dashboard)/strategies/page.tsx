@@ -9,7 +9,7 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { pipelinesApi, type Pipeline, type PipelineSource } from "@/lib/api";
 import { PipelineConfigEditor } from "@/components/pipeline/PipelineConfigEditor";
-import { Layers, Brain, Workflow, Play, PlayCircle, Loader2, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight } from "lucide-react";
+import { Layers, Brain, Workflow, Play, PlayCircle, Loader2, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, RotateCcw } from "lucide-react";
 
 // ─── visual helpers ──────────────────────────────────────────────────────────
 
@@ -79,6 +79,7 @@ export default function StrategiesPage() {
 
   const [busySource, setBusySource] = useState<PipelineSource | null>(null);
   const [runningAll, setRunningAll] = useState(false);
+  const [resetting, setResetting] = useState(false);
   // Which card's config accordion is currently open. Only one open at a time
   // to keep the grid layout from jumping unpredictably.
   const [openConfig, setOpenConfig] = useState<PipelineSource | null>(null);
@@ -127,6 +128,37 @@ export default function StrategiesPage() {
     }
   }
 
+  async function resetState() {
+    // Confirm because this flips pending orders to failed and re-enables
+    // auto_trade — both have downstream consequences a misclick would regret.
+    const ok = window.confirm(
+      "Reset pipeline state?\n\n" +
+      "• Pending orders will be marked failed\n" +
+      "• Card timestamps will reset to \"awaiting first run\"\n" +
+      "• Equity guardrail will rebase at current MT5 equity\n" +
+      "• Auto-trade will be re-enabled for all users\n\n" +
+      "Historical signals and executions are preserved."
+    );
+    if (!ok) return;
+    try {
+      setResetting(true);
+      const res = await pipelinesApi.reset();
+      const d = res.data;
+      const parts = [
+        `${d.pending_orders_cleared} pending orders cleared`,
+        d.equity_snapshot_rebased ? "equity guardrail rebased" : null,
+        d.auto_trade_reenabled > 0 ? `${d.auto_trade_reenabled} user(s) re-enabled` : null,
+      ].filter(Boolean);
+      toast.success(`Reset complete — ${parts.join(" • ")}`);
+      qc.invalidateQueries({ queryKey: ["pipelines"] });
+      qc.invalidateQueries({ queryKey: ["trading"] });
+    } catch {
+      toast.error("Reset failed");
+    } finally {
+      setResetting(false);
+    }
+  }
+
   return (
     <div>
       <Header title="Strategies" />
@@ -156,15 +188,27 @@ export default function StrategiesPage() {
           <p className="text-sm text-muted">
             {pipelines.filter((p) => p.enabled).length} of {pipelines.length} enabled
           </p>
-          <Button
-            onClick={runAll}
-            disabled={runningAll || pipelines.every((p) => !p.enabled)}
-            loading={runningAll}
-            className="px-5"
-          >
-            <PlayCircle size={14} />
-            Run all enabled
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={resetState}
+              disabled={resetting || runningAll}
+              loading={resetting}
+              variant="secondary"
+              title="Clear pending orders, rebase equity guardrail, re-enable auto-trade, and reset card timestamps. Historical data is preserved."
+            >
+              <RotateCcw size={14} />
+              Reset state
+            </Button>
+            <Button
+              onClick={runAll}
+              disabled={runningAll || pipelines.every((p) => !p.enabled)}
+              loading={runningAll}
+              className="px-5"
+            >
+              <PlayCircle size={14} />
+              Run all enabled
+            </Button>
+          </div>
         </div>
 
         {/* Pipeline cards */}
