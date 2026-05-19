@@ -298,12 +298,27 @@ export interface PipelineResetResult {
   note:                   string;
 }
 
+export interface PipelineRunAndTradeResult {
+  status:           "complete" | "noop";
+  reason?:          string;
+  pipelines:        Record<string, { signals_generated: number; ok: boolean; error?: string }>;
+  orders_attempted: number;
+  orders_filled:    number;
+  orders_failed:    number;
+  filled?:          Array<Record<string, unknown>>;
+  failed?:          Array<Record<string, unknown>>;
+}
+
 export const pipelinesApi = {
-  list:       ()                                                                    => api.get<{ pipelines: Pipeline[] }>("/pipelines"),
-  update:     (source: PipelineSource, body: Partial<Pick<Pipeline, "enabled" | "config">>) => api.patch<Pipeline>(`/pipelines/${source}`, body),
-  runOne:     (source: PipelineSource) => api.post<{ status: string; source: string }>(`/pipelines/${source}/run`),
-  runAll:     ()                       => api.post<{ status: string; sources?: string[] }>("/pipelines/run-all"),
-  reset:      ()                       => api.post<PipelineResetResult>("/pipelines/reset"),
+  list:            ()                                                                    => api.get<{ pipelines: Pipeline[] }>("/pipelines"),
+  update:          (source: PipelineSource, body: Partial<Pick<Pipeline, "enabled" | "config">>) => api.patch<Pipeline>(`/pipelines/${source}`, body),
+  runOne:          (source: PipelineSource) => api.post<{ status: string; source: string }>(`/pipelines/${source}/run`),
+  runAll:          ()                       => api.post<{ status: string; sources?: string[] }>("/pipelines/run-all"),
+  // The "& trade" variant is synchronous — generation + auto-execute can take
+  // several minutes. Use a generous client-side timeout (5min) so the browser
+  // doesn't abort while the backend is still working.
+  runAllAndTrade:  ()                       => api.post<PipelineRunAndTradeResult>("/pipelines/run-all-and-trade", undefined, { timeout: 5 * 60 * 1000 }),
+  reset:           ()                       => api.post<PipelineResetResult>("/pipelines/reset"),
 };
 
 // ── Strategy comparison report (Phase 8) ────────────────────────────────────

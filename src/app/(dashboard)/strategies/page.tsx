@@ -9,7 +9,7 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { pipelinesApi, type Pipeline, type PipelineSource } from "@/lib/api";
 import { PipelineConfigEditor } from "@/components/pipeline/PipelineConfigEditor";
-import { Layers, Brain, Workflow, Play, PlayCircle, Loader2, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, RotateCcw } from "lucide-react";
+import { Layers, Brain, Workflow, Play, PlayCircle, Loader2, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, RotateCcw, Zap } from "lucide-react";
 
 // ─── visual helpers ──────────────────────────────────────────────────────────
 
@@ -79,6 +79,7 @@ export default function StrategiesPage() {
 
   const [busySource, setBusySource] = useState<PipelineSource | null>(null);
   const [runningAll, setRunningAll] = useState(false);
+  const [runningAllAndTrading, setRunningAllAndTrading] = useState(false);
   const [resetting, setResetting] = useState(false);
   // Which card's config accordion is currently open. Only one open at a time
   // to keep the grid layout from jumping unpredictably.
@@ -125,6 +126,51 @@ export default function StrategiesPage() {
       toast.error("Run All failed");
     } finally {
       setRunningAll(false);
+    }
+  }
+
+  async function runAllAndTrade() {
+    // Confirm because this places real orders against the broker — a misclick
+    // would open positions the user might not have intended.
+    const ok = window.confirm(
+      "Run all enabled pipelines AND auto-execute the resulting signals?\n\n" +
+      "• Generates signals from every enabled pipeline\n" +
+      "• Sends orders to MT5 with per-pipeline quota:\n" +
+      "    max_open_positions ÷ enabled pipelines per pipeline,\n" +
+      "    ranked by confidence (EV tiebreak)\n" +
+      "• Requires MT5 connected + auto-trade enabled\n\n" +
+      "This can take several minutes."
+    );
+    if (!ok) return;
+    try {
+      setRunningAllAndTrading(true);
+      const res = await pipelinesApi.runAllAndTrade();
+      const d = res.data;
+      if (d.status === "noop") {
+        toast(`Nothing to run — ${d.reason ?? "no pipelines enabled"}`, { icon: "ℹ️" });
+      } else {
+        // Build a per-pipeline summary from the response, e.g.
+        // "ml_equities=12, ml_fx=6, rule_donchian=2"
+        const perPipe = Object.entries(d.pipelines)
+          .map(([src, info]) =>
+            info.ok
+              ? `${src}=${info.signals_generated}`
+              : `${src}=failed`
+          )
+          .join(", ");
+        const orderPart = `${d.orders_filled}/${d.orders_attempted} orders filled`;
+        toast.success(`Signals (${perPipe}) • ${orderPart}`);
+      }
+      qc.invalidateQueries({ queryKey: ["pipelines"] });
+      qc.invalidateQueries({ queryKey: ["trading"] });
+      qc.invalidateQueries({ queryKey: ["signals"] });
+    } catch (err: unknown) {
+      // Surface backend's HTTPException detail when present (MT5 not connected,
+      // auto-trade off, etc.) rather than a generic "Failed".
+      const e = err as { response?: { data?: { detail?: string } } };
+      toast.error(e.response?.data?.detail ?? "Run all & trade failed");
+    } finally {
+      setRunningAllAndTrading(false);
     }
   }
 
@@ -191,7 +237,7 @@ export default function StrategiesPage() {
           <div className="flex items-center gap-2">
             <Button
               onClick={resetState}
-              disabled={resetting || runningAll}
+              disabled={resetting || runningAll || runningAllAndTrading}
               loading={resetting}
               variant="secondary"
               title="Clear pending orders, rebase equity guardrail, re-enable auto-trade, and reset card timestamps. Historical data is preserved."
@@ -201,12 +247,23 @@ export default function StrategiesPage() {
             </Button>
             <Button
               onClick={runAll}
-              disabled={runningAll || pipelines.every((p) => !p.enabled)}
+              disabled={runningAll || runningAllAndTrading || pipelines.every((p) => !p.enabled)}
               loading={runningAll}
-              className="px-5"
+              variant="secondary"
+              title="Generate signals from every enabled pipeline. Does NOT auto-execute — the next scheduler :15 tick handles trading."
             >
               <PlayCircle size={14} />
               Run all enabled
+            </Button>
+            <Button
+              onClick={runAllAndTrade}
+              disabled={runningAll || runningAllAndTrading || pipelines.every((p) => !p.enabled)}
+              loading={runningAllAndTrading}
+              className="px-5"
+              title="Generate signals from every enabled pipeline AND immediately auto-execute the top-confidence signals per pipeline. Requires MT5 connected + auto-trade enabled."
+            >
+              <Zap size={14} />
+              Run all &amp; trade
             </Button>
           </div>
         </div>
