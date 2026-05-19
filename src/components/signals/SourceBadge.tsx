@@ -27,8 +27,12 @@ interface Props {
 }
 
 export function SourceBadge({ source, className, size = "sm" }: Props) {
-  const meta = (source && SOURCE_META[source]) ?? {
-    label: source ?? "Unknown",
+  // `source` may be undefined / empty / unknown — fall through to a neutral
+  // "Unknown" chip in those cases. Using an explicit conditional (not `&& ?? `)
+  // so TypeScript narrows the value to the meta-record shape, not `string`.
+  const known = source ? SOURCE_META[source] : undefined;
+  const meta = known ?? {
+    label: source && source.length > 0 ? source : "Unknown",
     chip:  "text-muted border-border bg-surface",
     dot:   "bg-muted",
   };

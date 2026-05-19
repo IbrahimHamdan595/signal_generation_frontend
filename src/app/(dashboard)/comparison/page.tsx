@@ -279,23 +279,33 @@ export default function ComparisonPage() {
                       <CartesianGrid stroke="rgba(255,255,255,0.05)" />
                       <XAxis
                         dataKey="timestamp"
-                        tickFormatter={(v) => new Date(v).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                        tickFormatter={(v) => new Date(v as string | number).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                         stroke="rgba(255,255,255,0.4)"
                         tick={{ fontSize: 11 }}
                       />
                       <YAxis
                         stroke="rgba(255,255,255,0.4)"
                         tick={{ fontSize: 11 }}
-                        tickFormatter={(v) => `$${v.toFixed(0)}`}
+                        tickFormatter={(v) => `$${Number(v ?? 0).toFixed(0)}`}
                       />
                       <Tooltip
                         contentStyle={{ background: "#1c1f29", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8 }}
-                        labelFormatter={(v) => new Date(v).toLocaleString()}
-                        formatter={(v: number, name: string) => [fmtMoney(v), data.sources.find((s) => s.source === name)?.display_name ?? name]}
+                        labelFormatter={(v) => new Date(v as string | number).toLocaleString()}
+                        formatter={(value, name) => {
+                          // Recharts v3 widened ValueType to include undefined and arrays;
+                          // coerce defensively so the tooltip never renders NaN.
+                          const num = typeof value === "number" ? value : Number(value ?? 0);
+                          const key = String(name ?? "");
+                          const label = data.sources.find((s) => s.source === key)?.display_name ?? key;
+                          return [fmtMoney(num), label];
+                        }}
                       />
                       <Legend
                         wrapperStyle={{ fontSize: 11 }}
-                        formatter={(value) => data.sources.find((s) => s.source === value)?.display_name ?? value}
+                        formatter={(value) => {
+                          const key = String(value ?? "");
+                          return data.sources.find((s) => s.source === key)?.display_name ?? key;
+                        }}
                       />
                       {data.sources.map((s) => (
                         <Line
