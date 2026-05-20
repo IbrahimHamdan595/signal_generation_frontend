@@ -159,7 +159,13 @@ export default function StrategiesPage() {
           )
           .join(", ");
         const orderPart = `${d.orders_filled}/${d.orders_attempted} orders filled`;
-        toast.success(`Signals (${perPipe}) • ${orderPart}`);
+        // Prefix with OHLCV refresh note when the backend topped up stale data,
+        // so the user knows the trades were on fresh bars.
+        const refresh = d.ohlcv_refresh;
+        const refreshPart = refresh?.refreshed
+          ? `OHLCV refreshed (was ${refresh.stale_hours}h stale) • `
+          : "";
+        toast.success(`${refreshPart}Signals (${perPipe}) • ${orderPart}`);
       }
       qc.invalidateQueries({ queryKey: ["pipelines"] });
       qc.invalidateQueries({ queryKey: ["trading"] });

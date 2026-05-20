@@ -301,6 +301,15 @@ export interface PipelineResetResult {
 export interface PipelineRunAndTradeResult {
   status:           "complete" | "noop";
   reason?:          string;
+  ohlcv_refresh?:   {
+    checked:        boolean;
+    refreshed:      boolean;
+    stale_hours?:   number;
+    tickers_ok?:    number;
+    tickers_fail?:  number;
+    rows_upserted?: number;
+    error?:         string;
+  };
   pipelines:        Record<string, { signals_generated: number; ok: boolean; error?: string }>;
   orders_attempted: number;
   orders_filled:    number;
