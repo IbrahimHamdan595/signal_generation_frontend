@@ -123,6 +123,9 @@ export default function PipelinePage() {
   const [search, setSearch] = useState("");
   const [sectorFilter, setSectorFilter] = useState("All");
   const [showList, setShowList] = useState(true);
+  // Free-text input for tickers not in the S&P 500 list (FX pairs, metals,
+  // indexes, anything yfinance accepts). Comma- or space-separated.
+  const [customTickersText, setCustomTickersText] = useState("");
 
   // Pipeline config
   const [interval, setInterval] = useState("1d");
@@ -557,6 +560,38 @@ export default function PipelinePage() {
     await runFromStep2(successfulTickers);
   }
 
+  // Variant of runPipeline that stops after Step 1 — useful for refreshing
+  // OHLCV bars (especially 1h data) without re-running the expensive
+  // sentiment ingest and model training. Mirrors runPipeline's setup, just
+  // omits the final runFromStep2 call.
+  async function runIngestOnly() {
+    if (selectedArray.length === 0 || isRunning) return;
+    setShowList(false);
+    setConnectionLost(false);
+    localStorage.removeItem("pipeline_checkpoint");
+
+    setOhlcvStep(INITIAL_STEP);
+    setSentimentStep(INITIAL_STEP);
+    setTrainStep(INITIAL_STEP);
+    setIngestJobId(null);
+    setTrainJobId(null);
+    setPipelineResult(null);
+    setResultFetched(false);
+
+    setOhlcvStep({ status: "running", done: 0, total: selectedArray.length, errors: [] });
+    try {
+      const { job_id } = await ingestOHLCV({ tickers: selectedArray, interval, period });
+      setIngestJobId(job_id);
+      const { done, failed } = await pollIngestJob(job_id);
+      const successfulTickers = selectedArray.filter((t) => !failed.includes(t));
+      setStep1Tickers(successfulTickers);
+      setOhlcvStep({ status: done === 0 ? "error" : "done", done, total: selectedArray.length, errors: failed });
+    } catch {
+      setOhlcvStep((s) => ({ ...s, status: "error" }));
+    }
+    // Intentionally no runFromStep2 — caller wants Step 1 only.
+  }
+
   // Sync train step status with live job + fetch results when done
   const jobStatus = trainJob?.status;
   const displayTrainStatus: StepStatus =
@@ -648,6 +683,72 @@ export default function PipelinePage() {
 
           {showList && (
             <div className="mt-4 space-y-3">
+              {/* Custom tickers — anything yfinance accepts but isn't in the
+                  S&P 500 list (FX pairs like EURUSD, metals like XAUUSD,
+                  indexes like ^GSPC). Comma- or space-separated. */}
+              <div className="flex flex-wrap items-center gap-2 bg-accent/5 border border-accent/20 rounded-lg p-2">
+                <input
+                  type="text"
+                  value={customTickersText}
+                  onChange={(e) => setCustomTickersText(e.target.value)}
+                  placeholder="Add custom tickers (FX/metals/indexes): EURUSD, GBPUSD, XAUUSD, USDJPY…"
+                  className="flex-1 min-w-48 bg-surface border border-border rounded-lg px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-accent/60 transition-colors"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const additions = customTickersText
+                        .split(/[\s,]+/)
+                        .map((t) => t.trim().toUpperCase())
+                        .filter(Boolean);
+                      if (additions.length === 0) return;
+                      setSelected((prev) => {
+                        const next = new Set(prev);
+                        for (const t of additions) next.add(t);
+                        return next;
+                      });
+                      setCustomTickersText("");
+                    }
+                  }}
+                />
+                <button
+                  onClick={() => {
+                    const additions = customTickersText
+                      .split(/[\s,]+/)
+                      .map((t) => t.trim().toUpperCase())
+                      .filter(Boolean);
+                    if (additions.length === 0) return;
+                    setSelected((prev) => {
+                      const next = new Set(prev);
+                      for (const t of additions) next.add(t);
+                      return next;
+                    });
+                    setCustomTickersText("");
+                  }}
+                  disabled={!customTickersText.trim()}
+                  className="text-xs px-3 py-2 rounded-lg border border-accent/40 text-accent hover:bg-accent/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Add to selection
+                </button>
+                <button
+                  onClick={() => {
+                    // One-click select the standard FX + metals set users
+                    // ingest for the 1h experiments.
+                    const fxSet = [
+                      "EURUSD","GBPUSD","USDJPY","AUDUSD","NZDUSD",
+                      "USDCAD","USDCHF","XAUUSD","XAGUSD","XPTUSD",
+                    ];
+                    setSelected((prev) => {
+                      const next = new Set(prev);
+                      for (const t of fxSet) next.add(t);
+                      return next;
+                    });
+                  }}
+                  className="text-xs px-3 py-2 rounded-lg border border-border text-muted hover:text-ink hover:bg-surface transition-colors"
+                  title="Add the 10 standard FX/metal tickers used in the 1h experiments"
+                >
+                  + FX/Metals preset
+                </button>
+              </div>
+
               {/* Controls */}
               <div className="flex flex-wrap gap-2 items-center">
                 <div className="relative flex-1 min-w-48">
@@ -996,6 +1097,20 @@ export default function PipelinePage() {
             >
               <Play size={14} />
               {isRunning ? "Running Pipeline…" : `Run Pipeline (${selected.size} tickers)`}
+            </Button>
+
+            {/* Ingest Only — skip Steps 2+3, just refresh OHLCV bars. Useful for
+                topping up 1h data without re-running sentiment or retraining. */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={runIngestOnly}
+              disabled={selected.size === 0 || isRunning}
+              className="flex-none justify-center px-5 border-accent/40 text-accent hover:bg-accent/10"
+              title="Ingest OHLCV only — skip sentiment and training. Useful for refreshing 1h bars."
+            >
+              <Database size={14} />
+              Ingest Only ({selected.size})
             </Button>
 
             {/* Train Only — skip Steps 1+2, use DB data directly */}
