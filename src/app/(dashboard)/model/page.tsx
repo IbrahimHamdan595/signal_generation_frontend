@@ -22,8 +22,10 @@ import Link from "next/link";
 import Header from "@/components/layout/Header";
 
 const ASSET_TABS: { key: AssetClass; label: string; sub: string }[] = [
-  { key: "equities", label: "Equities ML", sub: "S&P 500 transformer model" },
-  { key: "fx",       label: "FX ML",       sub: "FX/metals — vol-normalised labels" },
+  { key: "equities",    label: "Equities ML",      sub: "S&P 500 — daily bars, 10-bar lookahead" },
+  { key: "fx",          label: "FX ML",            sub: "FX/metals — daily bars, vol-normalised labels" },
+  { key: "equities_1h", label: "Equities ML (1h)", sub: "S&P 500 — 1h bars, 6-bar lookahead" },
+  { key: "fx_1h",       label: "FX ML (1h)",       sub: "FX/metals — 1h bars, vol-normalised labels" },
 ];
 
 const REGRESSION_LABELS: Record<string, string> = {
@@ -74,7 +76,7 @@ export default function ModelPage() {
         {/* Asset-class tabs — switches every panel below at once. Walk-forward
             is shared, everything else (status, report, versions, last training
             run, train trigger) is per asset class. */}
-        <div className="flex items-center gap-2 border-b border-border">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border">
           {ASSET_TABS.map((tab) => {
             const active = assetClass === tab.key;
             return (
@@ -89,7 +91,7 @@ export default function ModelPage() {
                 )}
               >
                 <span>{tab.label}</span>
-                <span className="ml-2 text-xs text-muted font-normal hidden sm:inline">
+                <span className="ml-2 text-xs text-muted font-normal hidden lg:inline">
                   {tab.sub}
                 </span>
               </button>
@@ -264,29 +266,41 @@ export default function ModelPage() {
             </Card>
           )}
 
-          {/* Train trigger */}
+          {/* Train trigger — adapts placeholder/copy to the active tab so the
+              same form drives all four classes (Equities / FX / *_1h). */}
+          {(() => {
+            const isFxClass = assetClass === "fx" || assetClass === "fx_1h";
+            const is1h      = assetClass.endsWith("_1h");
+            const classLabel = (
+              assetClass === "equities"    ? "Equities (daily)" :
+              assetClass === "fx"          ? "FX (daily)" :
+              assetClass === "equities_1h" ? "Equities (1h)" :
+                                             "FX (1h)"
+            );
+            const folder = `checkpoints/${assetClass}/`;
+            const hint = isFxClass
+              ? `FX/metal pairs (min 2). 1h trains take ~1-1.5h on CPU.`
+              : `Equity tickers (min 2). 1h trains take ~1h on CPU.`;
+            const placeholder = isFxClass
+              ? "EURUSD, GBPUSD, USDJPY, XAUUSD…"
+              : "AAPL, MSFT, GOOGL, AMZN…";
+            return (
           <Card glow="accent">
             <CardHeader>
-              <CardTitle>
-                Trigger Training — {assetClass === "fx" ? "FX" : "Equities"}
-              </CardTitle>
+              <CardTitle>Trigger Training — {classLabel}</CardTitle>
               <Zap size={14} className="text-accent" />
             </CardHeader>
+            <p className="text-xs text-muted mb-1">{hint}</p>
             <p className="text-xs text-muted mb-3">
-              {assetClass === "fx"
-                ? "Comma-separated FX/metal pairs (min 2). Saves to checkpoints/fx/."
-                : "Comma-separated equity tickers (min 2). Saves to checkpoints/equities/."}
+              Saves to <code className="text-ink bg-surface px-1 rounded">{folder}</code>
+              {is1h && " (interval=1h, lookahead=6 auto-applied)."}
             </p>
             <div className="space-y-3">
               <input
                 type="text"
                 value={tickerInput}
                 onChange={(e) => setTickerInput(e.target.value)}
-                placeholder={
-                  assetClass === "fx"
-                    ? "EURUSD, GBPUSD, USDJPY, XAUUSD…"
-                    : "AAPL, MSFT, GOOGL, AMZN…"
-                }
+                placeholder={placeholder}
                 className="w-full bg-surface border border-border rounded-lg px-3 py-2.5 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-accent/60 transition-colors"
               />
               <Button
@@ -305,6 +319,8 @@ export default function ModelPage() {
               </Link>
             </div>
           </Card>
+            );
+          })()}
         </div>
 
         {/* Walk-forward validation */}

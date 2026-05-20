@@ -131,8 +131,29 @@ export const sentimentApi = {
 // ── ML ────────────────────────────────────────────────────────────────────────
 
 // asset_class routes to the equities/fx checkpoint folders so each model's
-// status, report, versions and rollback can be viewed independently.
-export type AssetClass = "equities" | "fx";
+// status, report, versions and rollback can be viewed independently. The
+// "_1h" variants are intraday counterparts (1h bars, shorter lookahead) —
+// they live in their own checkpoint folders so the daily and intraday
+// models can both be loaded and compared on /comparison.
+export type AssetClass = "equities" | "fx" | "equities_1h" | "fx_1h";
+
+// Derive sensible training defaults from the asset class so the UI doesn't
+// have to expose interval/lookahead pickers separately — they always pair
+// with the class. Daily classes use 1d bars + 10-bar lookahead (~2-week
+// prediction window); 1h classes use 1h bars + 6-bar lookahead (~1-day).
+// FX/metal variants also get vol-normalised labels via barrier_atr_mult.
+function _trainDefaultsFor(asset_class: AssetClass) {
+  const is1h    = asset_class.endsWith("_1h");
+  const isFx    = asset_class === "fx" || asset_class === "fx_1h";
+  return {
+    interval:         is1h ? "1h" : "1d",
+    lookahead_window: is1h ? 6    : 10,
+    // FX needs vol-normalised barriers because per-pair volatility varies wildly
+    // (USDHKD 0.3% to XAUUSD 1.5%+). Equity barriers fall back to the trainer's
+    // default % thresholds.
+    barrier_atr_mult: isFx ? 1.5 : undefined,
+  };
+}
 
 export const mlApi = {
   getStatus: (asset_class: AssetClass = "equities") =>
@@ -141,10 +162,14 @@ export const mlApi = {
     api.get("/ml/report", { params: { asset_class } }),
   getLastResult: (asset_class: AssetClass = "equities") =>
     api.get("/ml/train/result", { params: { asset_class } }),
-  train: (tickers: string[], epochs = 50, asset_class: AssetClass = "equities") =>
-    api.post("/ml/train", { tickers, epochs, asset_class }),
-  trainSync: (tickers: string[], epochs = 20, asset_class: AssetClass = "equities") =>
-    api.post("/ml/train/sync", { tickers, epochs, asset_class }),
+  train: (tickers: string[], epochs = 50, asset_class: AssetClass = "equities") => {
+    const defaults = _trainDefaultsFor(asset_class);
+    return api.post("/ml/train", { tickers, epochs, asset_class, ...defaults });
+  },
+  trainSync: (tickers: string[], epochs = 20, asset_class: AssetClass = "equities") => {
+    const defaults = _trainDefaultsFor(asset_class);
+    return api.post("/ml/train/sync", { tickers, epochs, asset_class, ...defaults });
+  },
   predict: (ticker: string, interval = "1d") =>
     api.post("/ml/predict", { ticker, interval }),
   runWalkForward: (tickers: string[], n_splits = 5, epochs = 30) =>
