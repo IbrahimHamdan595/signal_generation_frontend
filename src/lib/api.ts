@@ -274,7 +274,12 @@ export const liveEdgeApi = {
 };
 
 // ── Three-pipeline orchestration (Phase 8b) ────────────────────────────────
-export type PipelineSource = "ml_equities" | "ml_fx" | "rule_donchian";
+// Six pipelines total: three daily (existing) and three intraday counterparts
+// running on 1h bars with shorter lookahead. The intraday set lets the forward
+// test compare horizons; /comparison aggregates per-source PnL across all six.
+export type PipelineSource =
+  | "ml_equities" | "ml_fx" | "rule_donchian"
+  | "ml_equities_1h" | "ml_fx_1h" | "rule_donchian_1h";
 
 export interface Pipeline {
   source:             PipelineSource;

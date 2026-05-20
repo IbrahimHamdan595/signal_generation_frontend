@@ -14,9 +14,14 @@ import { Layers, Brain, Workflow, Play, PlayCircle, Loader2, AlertTriangle, Chec
 // ─── visual helpers ──────────────────────────────────────────────────────────
 
 const SOURCE_ICON: Record<PipelineSource, typeof Brain> = {
-  ml_equities:   Brain,
-  ml_fx:         Brain,
-  rule_donchian: Workflow,
+  ml_equities:      Brain,
+  ml_fx:            Brain,
+  rule_donchian:    Workflow,
+  // Intraday variants share the icon with their daily counterpart; the
+  // "(1h)" suffix on the label and the darker badge colour distinguish them.
+  ml_equities_1h:   Brain,
+  ml_fx_1h:         Brain,
+  rule_donchian_1h: Workflow,
 };
 
 function formatRelative(iso: string | null): string {
@@ -274,10 +279,13 @@ export default function StrategiesPage() {
           </div>
         </div>
 
-        {/* Pipeline cards */}
+        {/* Pipeline cards — 1 col mobile, 2 col tablet, 3 col desktop. With
+            6 pipelines this wraps to two rows on desktop (daily on top,
+            intraday underneath) since the backend returns them in alpha
+            order, which happens to group daily-then-intraday by source name. */}
         {isLoading && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[0, 1, 2].map((i) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[0, 1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="h-44 bg-card border border-border rounded-xl animate-pulse" />
             ))}
           </div>
@@ -290,7 +298,7 @@ export default function StrategiesPage() {
         )}
 
         {!isLoading && pipelines.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {pipelines.map((p) => {
               const Icon = SOURCE_ICON[p.source as PipelineSource] ?? Brain;
               const isBusy = busySource === p.source;

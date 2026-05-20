@@ -1,8 +1,11 @@
 import { cn } from "@/lib/utils";
 
 // Source palette matches the cumulative-PnL chart on /comparison so users
-// can mentally connect a badge on /signals with a line on the chart.
+// can mentally connect a badge on /signals with a line on the chart. The
+// "_1h" intraday variants share the daily hue but use a darker shade so
+// they're visually grouped while still distinguishable at a glance.
 const SOURCE_META: Record<string, { label: string; chip: string; dot: string }> = {
+  // ── Daily pipelines ──────────────────────────────────────────────────────
   ml_equities: {
     label: "Equities ML",
     chip:  "text-sky-300 border-sky-500/30 bg-sky-500/10",
@@ -17,6 +20,22 @@ const SOURCE_META: Record<string, { label: string; chip: string; dot: string }> 
     label: "Donchian",
     chip:  "text-amber-300 border-amber-500/30 bg-amber-500/10",
     dot:   "bg-amber-400",
+  },
+  // ── Intraday (1h) pipelines ──────────────────────────────────────────────
+  ml_equities_1h: {
+    label: "Equities ML (1h)",
+    chip:  "text-sky-200 border-sky-700/40 bg-sky-700/20",
+    dot:   "bg-sky-600",
+  },
+  ml_fx_1h: {
+    label: "FX ML (1h)",
+    chip:  "text-emerald-200 border-emerald-700/40 bg-emerald-700/20",
+    dot:   "bg-emerald-600",
+  },
+  rule_donchian_1h: {
+    label: "Donchian (1h)",
+    chip:  "text-amber-200 border-amber-700/40 bg-amber-700/20",
+    dot:   "bg-amber-600",
   },
 };
 
@@ -55,8 +74,11 @@ export function SourceBadge({ source, className, size = "sm" }: Props) {
 
 // Also exported for the filter row so chip styles stay consistent.
 export const SOURCE_OPTIONS = [
-  { value: "ml_equities",   label: "Equities ML" },
-  { value: "ml_fx",         label: "FX ML" },
-  { value: "rule_donchian", label: "Donchian" },
+  { value: "ml_equities",      label: "Equities ML" },
+  { value: "ml_fx",            label: "FX ML" },
+  { value: "rule_donchian",    label: "Donchian" },
+  { value: "ml_equities_1h",   label: "Equities ML (1h)" },
+  { value: "ml_fx_1h",         label: "FX ML (1h)" },
+  { value: "rule_donchian_1h", label: "Donchian (1h)" },
 ] as const;
 export type SourceOption = (typeof SOURCE_OPTIONS)[number]["value"];
