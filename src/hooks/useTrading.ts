@@ -211,4 +211,5 @@ export interface Execution {
   ticker: string | null;
   action: string | null;
   confidence: number | null;
+  source: string | null;
 }
