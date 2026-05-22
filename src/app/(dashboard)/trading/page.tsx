@@ -359,6 +359,7 @@ export default function TradingPage() {
                     <tr className="text-xs text-muted border-b border-border">
                       <th className="text-left py-2 pr-4">Symbol</th>
                       <th className="text-left py-2 pr-4">Side</th>
+                      <th className="text-left py-2 pr-4">Source</th>
                       <th className="text-right py-2 pr-4">Volume</th>
                       <th className="text-right py-2 pr-4">Open</th>
                       <th className="text-right py-2 pr-4">Current</th>
@@ -376,6 +377,9 @@ export default function TradingPage() {
                             {p.side === "BUY" ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
                             {p.side}
                           </span>
+                        </td>
+                        <td className="py-2.5 pr-4">
+                          {p.source ? <SourceBadge source={p.source} /> : <span className="text-muted text-xs">—</span>}
                         </td>
                         <td className="text-right py-2.5 pr-4 text-ink">{p.volume}</td>
                         <td className="text-right py-2.5 pr-4 text-muted">{formatNumber(p.open_price, 5)}</td>

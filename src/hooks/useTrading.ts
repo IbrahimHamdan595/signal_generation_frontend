@@ -189,6 +189,7 @@ export interface MT5Position {
   swap: number;
   open_time: number;
   comment: string;
+  source: string | null;
 }
 
 export interface Execution {
