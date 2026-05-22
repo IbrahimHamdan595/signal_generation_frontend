@@ -406,6 +406,7 @@ export interface StrategyTrade {
   status:         string | null;
   closed_at:      string | null;
   created_at:     string | null;
+  source:         string | null;
 }
 
 export const reportsApi = {
