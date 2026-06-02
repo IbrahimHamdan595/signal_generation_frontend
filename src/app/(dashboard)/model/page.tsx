@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import ConfusionMatrix from "@/components/model/ConfusionMatrix";
+import AccountProjection from "@/components/model/AccountProjection";
 import {
   useModelStatus,
   useEvalReport,
@@ -322,6 +323,10 @@ export default function ModelPage() {
             );
           })()}
         </div>
+
+        {/* Account-sizing projection — maps simulator stats onto a chosen
+            balance so the user can see expected monthly PnL & DD in $ */}
+        {report && <AccountProjection report={report} assetClass={assetClass} />}
 
         {/* Walk-forward validation */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">

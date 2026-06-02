@@ -151,6 +151,13 @@ export interface EvalReport {
     win_rate: number;
     total_trades: number;
     avg_return: number;
+    max_drawdown?: number;
+    total_return?: number;
+    annualisation?: {
+      trades_per_year: number;
+      bars_per_year: number;
+      interval: string;
+    };
   };
 }
 
