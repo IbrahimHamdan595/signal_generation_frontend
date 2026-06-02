@@ -38,10 +38,14 @@ export default function HeroMetrics() {
 
   const pnl30       = summary?.realized_pnl ?? 0;
   const pnlPctOfBal = balance > 0 ? (pnl30 / balance) * 100 : 0;
+  const grossWins   = summary?.gross_wins   ?? 0;
+  const grossLosses = Math.abs(summary?.gross_losses ?? 0);
+  const totalTrades = summary?.total_trades ?? 0;
 
   const winRate     = summary?.actual_win_rate ?? 0;
-  const wins        = summary?.wins   ?? 0;
-  const losses      = summary?.losses ?? 0;
+  const wins        = summary?.wins      ?? 0;
+  const losses      = summary?.losses    ?? 0;
+  const breakeven   = summary?.breakeven ?? 0;
   const winVerdict  = winRate >= BREAKEVEN_WIN_RATE;
 
   const openCount   = positions?.length ?? 0;
@@ -63,7 +67,7 @@ export default function HeroMetrics() {
         </p>
       </Card>
 
-      {/* Tile 2 — 30-day net PnL */}
+      {/* Tile 2 — 30-day net PnL with gross breakdown */}
       <Card glow={pnl30 >= 0 ? "buy" : "sell"}>
         <div className="flex items-center justify-between mb-2">
           <CardTitle>30-day Net PnL</CardTitle>
@@ -72,12 +76,17 @@ export default function HeroMetrics() {
         <p className={`text-2xl font-bold ${pnl30 >= 0 ? "text-buy" : "text-sell"}`}>
           {fmtUsd(pnl30, true)}
         </p>
-        <p className="text-xs text-muted mt-1">
+        <p className="text-xs mt-1">
+          <span className="text-buy">{fmtUsd(grossWins, true)}</span>
+          <span className="text-muted"> / </span>
+          <span className="text-sell">-{fmtUsd(grossLosses)}</span>
+        </p>
+        <p className="text-[11px] text-muted mt-0.5">
           {pnlPctOfBal >= 0 ? "+" : ""}{pnlPctOfBal.toFixed(2)}% of balance
         </p>
       </Card>
 
-      {/* Tile 3 — Win rate */}
+      {/* Tile 3 — Win rate with full breakdown (W / L / BE = total closed) */}
       <Card glow={winVerdict ? "buy" : "sell"}>
         <div className="flex items-center justify-between mb-2">
           <CardTitle>Win Rate</CardTitle>
@@ -87,7 +96,12 @@ export default function HeroMetrics() {
           {(winRate * 100).toFixed(1)}%
         </p>
         <p className="text-xs text-muted mt-1">
-          {wins}W / {losses}L · {winVerdict ? "Above" : "Below"} breakeven (30%)
+          <span className="text-buy">{wins}W</span> / <span className="text-sell">{losses}L</span>
+          {breakeven > 0 && <> / <span className="text-muted">{breakeven} BE</span></>}
+          <span className="text-muted"> · {totalTrades} closed</span>
+        </p>
+        <p className="text-[11px] text-muted mt-0.5">
+          {winVerdict ? "Above" : "Below"} breakeven (30%)
         </p>
       </Card>
 

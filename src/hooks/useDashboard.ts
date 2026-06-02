@@ -18,6 +18,9 @@ export interface LiveEdgeSummary {
   total_trades: number;
   wins: number;
   losses: number;
+  breakeven?: number;
+  gross_wins?: number;
+  gross_losses?: number;
   actual_win_rate: number;
   avg_predicted_conf: number;
   calibration_gap: number;
