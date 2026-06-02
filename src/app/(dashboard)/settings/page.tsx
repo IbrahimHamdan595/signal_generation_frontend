@@ -223,7 +223,6 @@ export default function SettingsPage() {
               ["G then S", "Signals"],
               ["G then M", "Market"],
               ["G then O", "Model"],
-              ["G then W", "Watchlist"],
             ].map(([key, label]) => (
               <div key={key} className="flex items-center gap-2">
                 <kbd className="px-1.5 py-0.5 bg-surface border border-border rounded text-[10px] font-mono text-ink">{key}</kbd>

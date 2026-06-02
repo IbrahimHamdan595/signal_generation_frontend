@@ -235,15 +235,6 @@ export const backtestApi = {
     api.post("/backtest/portfolio", tickers, { params: { interval, initial_capital } }),
 };
 
-// ── Watchlist ─────────────────────────────────────────────────────────────────
-
-export const watchlistApi = {
-  get: () => api.get("/users/me/watchlist"),
-  add: (ticker: string) => api.post(`/users/me/watchlist/${ticker}`),
-  remove: (ticker: string) => api.delete(`/users/me/watchlist/${ticker}`),
-  replace: (tickers: string[]) => api.put("/users/me/watchlist", { watchlist: tickers }),
-};
-
 // ── Portfolio ─────────────────────────────────────────────────────────────────
 
 export const portfolioApi = {
@@ -287,7 +278,26 @@ export const tradingApi = {
   getExecutions:(limit?: number, offset?: number) =>
     api.get("/trading/executions", { params: { limit, offset } }),
   runNow:       () => api.post("/trading/run-now"),
+
+  // Dashboard polish — Track 6
+  getActivity:        (limit = 20)   => api.get("/trading/activity",         { params: { limit } }),
+  getCommissionStats: (days = 7)     => api.get("/trading/commission-stats", { params: { days  } }),
 };
+
+export interface ActivityEvent {
+  ts:     string | null;
+  kind:   "signal_generation" | "order_fill" | "order_close" | "order_reject";
+  source: string | null;
+  symbol: string | null;
+  count:  number | null;
+  pnl:    number | null;
+}
+
+export interface CommissionStats {
+  days:                 number;
+  signals_filtered:     number;
+  commission_saved_usd: number;
+}
 
 // ── Live Edge ─────────────────────────────────────────────────────────────────
 

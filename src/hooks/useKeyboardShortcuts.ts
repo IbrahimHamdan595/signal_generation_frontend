@@ -8,7 +8,6 @@ import { useRouter } from "next/navigation";
  *   G S → /signals
  *   G M → /market
  *   G O → /model
- *   G W → /watchlist
  *   G D → / (dashboard)
  */
 export function useKeyboardShortcuts() {
@@ -39,7 +38,6 @@ export function useKeyboardShortcuts() {
           case "S": router.push("/signals"); break;
           case "M": router.push("/market"); break;
           case "O": router.push("/model"); break;
-          case "W": router.push("/watchlist"); break;
           case "D": router.push("/"); break;
         }
         return;

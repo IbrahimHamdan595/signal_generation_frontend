@@ -359,6 +359,5 @@ export interface UserResponse {
   email: string;
   is_active: boolean;
   is_admin: boolean;
-  watchlist: string[];
   created_at: string;
 }
